@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { apiClient } from '@/lib/api-client'
 
 export async function createJobPosting(formData: FormData) {
   const supabase = await createClient()
@@ -24,17 +25,45 @@ export async function createJobPosting(formData: FormData) {
     status: 'active' as const
   }
 
-  const { error } = await supabase
+  // Insert job posting and get the inserted record
+  const { data: insertedJob, error } = await supabase
     .from('job_postings')
     .insert(jobData)
+    .select('*')
+    .single()
 
-  if (error) {
+  if (error || !insertedJob) {
     console.error('Error creating job posting:', error)
-    redirect('/job-postings?error=' + encodeURIComponent(error.message))
+    redirect('/job-postings?error=' + encodeURIComponent(error?.message || 'Failed to create job posting'))
+  }
+
+  // Trigger AI analysis asynchronously (don't wait for completion)
+  try {
+    console.log('Triggering AI analysis for job:', insertedJob.id)
+    
+    // Check if backend is reachable first
+    const isReachable = await apiClient.isBackendReachable()
+    
+    if (isReachable) {
+      // Fire and forget - trigger AI analysis
+      apiClient.analyzeJob({
+        job_id: insertedJob.id,
+        title: insertedJob.title,
+        description: insertedJob.description,
+        requirements: insertedJob.requirements
+      }).catch((error) => {
+        console.error('AI analysis failed (non-blocking):', error)
+      })
+    } else {
+      console.warn('Backend not reachable, skipping AI analysis')
+    }
+  } catch (error) {
+    console.error('Error triggering AI analysis (non-blocking):', error)
+    // Don't fail the job creation if AI analysis fails
   }
 
   revalidatePath('/job-postings')
-  redirect('/job-postings?success=Job posting created successfully')
+  redirect('/job-postings?success=Job posting created successfully. AI analysis will be available shortly.')
 }
 
 export async function updateJobPostingStatus(formData: FormData) {

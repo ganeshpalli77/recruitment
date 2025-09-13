@@ -121,6 +121,7 @@ export type Database = {
       }
       job_postings: {
         Row: {
+          ai_analysis: Json | null
           created_at: string | null
           created_by: string | null
           description: string
@@ -133,6 +134,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          ai_analysis?: Json | null
           created_at?: string | null
           created_by?: string | null
           description: string
@@ -145,6 +147,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          ai_analysis?: Json | null
           created_at?: string | null
           created_by?: string | null
           description?: string

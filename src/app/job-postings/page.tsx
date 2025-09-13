@@ -48,7 +48,7 @@ export default async function JobPostingsPage({ searchParams }: PageProps) {
     redirect('/login')
   }
 
-  // Fetch job postings from database
+  // Fetch job postings from database including AI analysis
   const { data: jobPostings, error: jobPostingsError } = await supabase
     .from('job_postings')
     .select(`
@@ -60,7 +60,8 @@ export default async function JobPostingsPage({ searchParams }: PageProps) {
       skills_required,
       status,
       created_at,
-      updated_at
+      updated_at,
+      ai_analysis
     `)
     .order('created_at', { ascending: false })
 
