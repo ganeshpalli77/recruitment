@@ -12,3 +12,19 @@ postgrest==0.17.1
 gotrue==2.10.1
 realtime==1.0.6
 storage3==0.8.1
+
+# Document processing
+llama-parse==0.5.2
+llama-index==0.11.23
+llama-index-readers-file==0.3.0
+pypdf==4.3.1
+aiofiles==24.1.0
+
+# Rate limiting and async
+asyncio==3.4.3
+aioredis==2.0.1
+slowapi==0.1.9
+
+# Data processing
+pandas==2.2.3
+numpy==1.26.4

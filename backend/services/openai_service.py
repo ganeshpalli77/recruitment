@@ -4,6 +4,7 @@ Azure OpenAI service for job description analysis
 
 import json
 import logging
+import re
 from typing import Optional, Dict, Any
 from openai import AzureOpenAI
 from config import get_settings
@@ -169,3 +170,183 @@ class OpenAIService:
             difficulty_score=5,
             ai_confidence_score=0.5
         )
+    
+    async def evaluate_resume(self, evaluation_prompt: str) -> str:
+        """
+        Evaluate a resume against job requirements using GPT-4
+        
+        Args:
+            evaluation_prompt: Detailed prompt for resume evaluation
+            
+        Returns:
+            JSON string with evaluation scores and details
+        """
+        try:
+            # Call Azure OpenAI for resume evaluation
+            response = self.client.chat.completions.create(
+                model=self.deployment_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": self._get_resume_evaluation_system_prompt()
+                    },
+                    {
+                        "role": "user",
+                        "content": evaluation_prompt
+                    }
+                ],
+                temperature=0.3,  # Lower temperature for more consistent scoring
+                max_tokens=2000
+            )
+            
+            # Get the evaluation response
+            evaluation_text = response.choices[0].message.content
+            logger.info("Received resume evaluation from Azure OpenAI")
+            
+            return evaluation_text
+            
+        except Exception as e:
+            logger.error(f"Error evaluating resume: {str(e)}")
+            # Return a default evaluation on error
+            return json.dumps({
+                "skills_score": 50,
+                "experience_score": 50,
+                "education_score": 50,
+                "skills_matched": [],
+                "skills_missing": [],
+                "experience_details": {"years": 0, "relevance": "Error in evaluation"},
+                "education_details": {"highest_degree": "Unknown", "relevance": "Error in evaluation"},
+                "summary": "Evaluation could not be completed due to an error",
+                "strengths": [],
+                "improvements": ["Unable to evaluate"]
+            })
+    
+    def _get_resume_evaluation_system_prompt(self) -> str:
+        """Get the system prompt for resume evaluation"""
+        return """
+        You are an expert recruiter and talent acquisition specialist with years of experience 
+        in evaluating resumes against job requirements. Your task is to provide objective, 
+        fair, and thorough evaluation of candidates.
+        
+        Evaluation Guidelines:
+        
+        SKILLS SCORING (0-100):
+        - 90-100: Perfect match, has all required skills and more
+        - 75-89: Strong match, has most required skills
+        - 60-74: Good match, has many required skills
+        - 40-59: Fair match, has some required skills
+        - 20-39: Weak match, has few required skills
+        - 0-19: No match, lacks most required skills
+        
+        EXPERIENCE SCORING (0-100):
+        - If candidate meets or exceeds required years: 80-100 (based on relevance)
+        - If candidate has 75-99% of required years: 60-79
+        - If candidate has 50-74% of required years: 40-59
+        - If candidate has 25-49% of required years: 20-39
+        - If candidate has less than 25% of required years: 0-19
+        
+        EDUCATION SCORING (0-100):
+        - Perfect match with advanced relevant degree: 90-100
+        - Required degree in relevant field: 75-89
+        - Related degree or equivalent experience: 50-74
+        - Some relevant education: 25-49
+        - No relevant education: 0-24
+        
+        Always respond with valid JSON only. Be accurate and fair in your assessment.
+        Focus on actual qualifications rather than demographic factors.
+        """
+    
+    async def extract_candidate_name(self, resume_text: str) -> str:
+        """
+        Extract candidate's full name from resume text using GPT-4
+        
+        Args:
+            resume_text: Raw resume text
+            
+        Returns:
+            Extracted candidate name
+        """
+        try:
+            # Create prompt for name extraction
+            prompt = f"""
+            Extract the candidate's full name from this resume text. 
+            The name is usually at the very beginning of the resume.
+            
+            Resume text (first 500 characters):
+            {resume_text[:500]}
+            
+            Instructions:
+            1. Look for the candidate's full name, typically at the top of the resume
+            2. Ignore section headers like "SUMMARY", "EXPERIENCE", "EDUCATION", etc.
+            3. Return only the person's actual name (first name + last name)
+            4. If no clear name is found, return "Unknown Candidate"
+            
+            Respond with ONLY the candidate's name, nothing else.
+            """
+            
+            response = self.client.chat.completions.create(
+                model=self.deployment_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at extracting candidate names from resumes. Extract only the person's actual name, ignoring any section headers or other text."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.1,  # Very low temperature for consistent results
+                max_tokens=50  # Name should be short
+            )
+            
+            extracted_name = response.choices[0].message.content.strip()
+            
+            # Clean up the extracted name
+            cleaned_name = self._clean_extracted_name(extracted_name)
+            
+            logger.info(f"Extracted candidate name: {cleaned_name}")
+            return cleaned_name
+            
+        except Exception as e:
+            logger.error(f"Error extracting candidate name: {str(e)}")
+            # Fallback to basic extraction
+            return self._extract_name_fallback(resume_text)
+    
+    def _clean_extracted_name(self, name: str) -> str:
+        """Clean up extracted name"""
+        if not name or name.lower() in ['unknown', 'candidate', 'summary', 'resume', 'cv']:
+            return "Unknown Candidate"
+        
+        # Remove common prefixes/suffixes
+        name = re.sub(r'^(name:|candidate:|mr\.|ms\.|dr\.)\s*', '', name, flags=re.IGNORECASE)
+        name = re.sub(r'\s*(resume|cv)$', '', name, flags=re.IGNORECASE)
+        
+        # Clean up extra whitespace
+        name = ' '.join(name.split())
+        
+        # Capitalize properly
+        name = ' '.join(word.capitalize() for word in name.split())
+        
+        return name if len(name) > 1 else "Unknown Candidate"
+    
+    def _extract_name_fallback(self, resume_text: str) -> str:
+        """Fallback name extraction without LLM"""
+        lines = resume_text.split('\n')
+        
+        for line in lines[:5]:  # Check first 5 lines
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Skip common headers
+            if any(header in line.lower() for header in ['resume', 'cv', 'curriculum', 'summary', 'objective']):
+                continue
+                
+            # Check if line looks like a name
+            words = line.split()
+            if 2 <= len(words) <= 4 and all(word.isalpha() or word.replace('.', '').isalpha() for word in words):
+                # Looks like a name
+                return ' '.join(word.capitalize() for word in words)
+        
+        return "Unknown Candidate"

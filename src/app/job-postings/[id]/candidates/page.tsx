@@ -29,6 +29,8 @@ import {
 } from "@tabler/icons-react"
 import Link from "next/link"
 import { CandidatesResultsTable } from "./components/candidates-results-table"
+import { UploadButton } from "./components/upload-button"
+import { FixNamesButton } from "./components/fix-names-button"
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -67,49 +69,47 @@ export default async function JobCandidatesPage({ params, searchParams }: PagePr
     redirect('/job-postings')
   }
 
-  // Fetch candidates for this job posting (from candidate_evaluations table)
-  const { data: candidateEvaluations, error: candidatesError } = await supabase
-    .from('candidate_evaluations')
-    .select(`
-      id,
-      overall_score,
-      skills_score,
-      experience_score,
-      education_score,
-      evaluation_details,
-      created_at,
-      candidate_id,
-      candidates (
-        id,
-        name,
-        email,
-        phone,
-        position,
-        status,
-        ai_score,
-        skills_match,
-        experience_years,
-        education,
-        resume_url,
-        submission_date
-      )
-    `)
+  // Fetch evaluated resumes for this job posting (from resume_results table)
+  const { data: resumeResults, error: candidatesError } = await supabase
+    .from('resume_results')
+    .select('*')
     .eq('job_posting_id', id)
+    .eq('processing_status', 'completed')
     .order('overall_score', { ascending: false })
 
   if (candidatesError) {
     console.error('Error fetching candidates:', candidatesError)
   }
 
-  const candidates = candidateEvaluations?.map(evaluation => ({
-    evaluationId: evaluation.id,
-    overallScore: evaluation.overall_score || 0,
-    skillsScore: evaluation.skills_score || 0,
-    experienceScore: evaluation.experience_score || 0,
-    educationScore: evaluation.education_score || 0,
-    evaluationDetails: evaluation.evaluation_details,
-    evaluatedAt: evaluation.created_at,
-    ...evaluation.candidates
+  const candidates = resumeResults?.map(result => ({
+    id: result.id,
+    evaluationId: result.id,
+    name: result.candidate_name || 'Unknown',
+    email: result.candidate_email || '',
+    phone: result.candidate_phone || '',
+    position: 'Candidate',
+    status: 'under_review',
+    overallScore: result.overall_score || 0,
+    skillsScore: result.skills_score || 0,
+    experienceScore: result.experience_score || 0,
+    educationScore: result.education_score || 0,
+    skills_match: `${result.skills_score || 0}%`,
+    experience_years: result.experience_details?.years || 0,
+    education: result.education_details?.highest_degree || '',
+    resume_url: result.resume_file_url || '',
+    evaluatedAt: result.evaluated_at || result.created_at || new Date().toISOString(),
+    evaluationDetails: {
+      evaluation_summary: result.evaluation_summary,
+      skills_matched: result.skills_matched || [],
+      skills_missing: result.skills_missing || [],
+      key_strengths: result.key_strengths || [],
+      improvement_areas: result.improvement_areas || [],
+      recommendation: result.recommendation,
+      processing_time_ms: result.processing_time_ms,
+      ai_model: result.ai_model || 'gpt-4.1',
+      file_name: result.resume_file_name,
+      evaluation_metadata: result.evaluation_metadata || {}
+    }
   })) || []
 
   // Handle alert messages
@@ -162,10 +162,12 @@ export default async function JobCandidatesPage({ params, searchParams }: PagePr
                     Upload resumes and manage candidates for this position
                   </p>
                 </div>
-                <Button className="bg-green-600 hover:bg-green-700 text-white" size="lg">
-                  <IconUpload className="h-4 w-4 mr-2" />
-                  Upload Resumes
-                </Button>
+                <div className="flex items-center gap-2">
+                  <UploadButton jobId={id} />
+                  {candidates.length > 0 && (
+                    <FixNamesButton jobId={id} />
+                  )}
+                </div>
               </div>
 
               {/* Alert Messages */}

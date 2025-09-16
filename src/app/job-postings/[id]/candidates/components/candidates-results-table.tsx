@@ -34,6 +34,7 @@ import {
   IconTrendingUp,
   IconTrendingDown,
   IconMinus,
+  IconTags,
 } from "@tabler/icons-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -180,8 +181,8 @@ export function CandidatesResultsTable({ candidates, jobId }: CandidatesResultsT
                 </div>
               </Button>
             </DrawerTrigger>
-            <DrawerContent className="max-w-4xl mx-auto">
-              <DrawerHeader>
+            <DrawerContent className="max-w-4xl mx-auto max-h-[85vh] sm:max-h-[90vh] flex flex-col overflow-hidden">
+              <DrawerHeader className="flex-shrink-0">
                 <DrawerTitle className="flex items-center gap-3">
                   <div className="p-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg">
                     <IconUser className="h-5 w-5 text-white" />
@@ -196,7 +197,7 @@ export function CandidatesResultsTable({ candidates, jobId }: CandidatesResultsT
                 </DrawerDescription>
               </DrawerHeader>
               
-              <div className="px-6 pb-6 space-y-6">
+              <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-6">
                 {/* Contact Information */}
                 <Card>
                   <CardContent className="p-4">
@@ -204,7 +205,7 @@ export function CandidatesResultsTable({ candidates, jobId }: CandidatesResultsT
                       <IconUser className="h-4 w-4" />
                       Contact Information
                     </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                       <div className="flex items-center gap-2">
                         <IconMail className="h-4 w-4 text-gray-500" />
                         <span>{row.original.email}</span>
@@ -250,7 +251,7 @@ export function CandidatesResultsTable({ candidates, jobId }: CandidatesResultsT
                       
                       <Separator />
                       
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div>
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-sm">Skills Match</span>
@@ -279,35 +280,240 @@ export function CandidatesResultsTable({ candidates, jobId }: CandidatesResultsT
                   </CardContent>
                 </Card>
 
-                {/* Additional Details */}
-                {(row.original.education || row.original.skills_match) && (
+                {/* Detailed Skills Analysis */}
+                <Card>
+                  <CardContent className="p-4">
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <IconTags className="h-4 w-4" />
+                      Skills Analysis & Match
+                    </h4>
+                    
+                    {/* Skills Matched */}
+                    {row.original.evaluationDetails?.skills_matched && row.original.evaluationDetails.skills_matched.length > 0 && (
+                      <div className="mb-4">
+                        <h5 className="font-medium text-green-700 dark:text-green-400 mb-2 flex items-center gap-1">
+                          <IconCircleCheckFilled className="h-4 w-4" />
+                          Matching Skills Found ({row.original.evaluationDetails.skills_matched.length})
+                        </h5>
+                        <div className="flex flex-wrap gap-2">
+                          {row.original.evaluationDetails.skills_matched.map((skill: string, index: number) => (
+                            <Badge key={index} className="bg-green-100 text-green-800 border-green-300">
+                              {skill}
+                            </Badge>
+                          ))}
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                          ✅ These skills from the job requirements were found in the candidate's resume, indicating relevant experience.
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Skills Missing */}
+                    {row.original.evaluationDetails?.skills_missing && row.original.evaluationDetails.skills_missing.length > 0 && (
+                      <div className="mb-4">
+                        <h5 className="font-medium text-orange-700 dark:text-orange-400 mb-2 flex items-center gap-1">
+                          <IconMinus className="h-4 w-4" />
+                          Missing Required Skills ({row.original.evaluationDetails.skills_missing.length})
+                        </h5>
+                        <div className="flex flex-wrap gap-2">
+                          {row.original.evaluationDetails.skills_missing.slice(0, 10).map((skill: string, index: number) => (
+                            <Badge key={index} variant="outline" className="border-orange-300 text-orange-700">
+                              {skill}
+                            </Badge>
+                          ))}
+                          {row.original.evaluationDetails.skills_missing.length > 10 && (
+                            <Badge variant="outline" className="border-gray-300 text-gray-600">
+                              +{row.original.evaluationDetails.skills_missing.length - 10} more
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                          ⚠️ These skills are required for the position but were not clearly demonstrated in the candidate's resume.
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Experience Analysis */}
+                <Card>
+                  <CardContent className="p-4">
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <IconBriefcase className="h-4 w-4" />
+                      Experience Assessment
+                    </h4>
+                    
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <div>
+                          <span className="font-medium">Required Experience:</span>
+                          <span className="ml-2 text-gray-600 dark:text-gray-400">Minimum years needed for this role</span>
+                        </div>
+                        <Badge variant="outline" className="font-semibold">
+                          {row.original.evaluationDetails?.evaluation_metadata?.required_experience_years || 'N/A'} years
+                        </Badge>
+                      </div>
+                      
+                      <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                        <div>
+                          <span className="font-medium">Candidate Experience:</span>
+                          <span className="ml-2 text-gray-600 dark:text-gray-400">Years found in resume</span>
+                        </div>
+                        <Badge className={row.original.experienceScore >= 70 ? "bg-green-100 text-green-800" : row.original.experienceScore >= 50 ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"}>
+                          {row.original.experience_years || 0} years
+                        </Badge>
+                      </div>
+
+                      {row.original.evaluationDetails?.experience_details && (
+                        <div className="p-3 border rounded-lg">
+                          <p className="text-sm">
+                            <span className="font-medium">Analysis: </span>
+                            {row.original.evaluationDetails.experience_details.relevance || "Experience level assessment based on resume content and job requirements."}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* AI Evaluation Summary */}
+                {row.original.evaluationDetails?.evaluation_summary && (
                   <Card>
                     <CardContent className="p-4">
-                      <h4 className="font-semibold mb-3">Additional Details</h4>
-                      <div className="space-y-2 text-sm">
-                        {row.original.education && (
-                          <div>
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Education: </span>
-                            <span>{row.original.education}</span>
-                          </div>
-                        )}
-                        {row.original.skills_match && (
-                          <div>
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Skills Match: </span>
-                            <span>{row.original.skills_match}</span>
-                          </div>
-                        )}
-                        <div>
-                          <span className="font-medium text-gray-700 dark:text-gray-300">Analyzed: </span>
-                          <span>{new Date(row.original.evaluatedAt).toLocaleDateString()}</span>
-                        </div>
+                      <h4 className="font-semibold mb-4 flex items-center gap-2">
+                        <IconBrain className="h-4 w-4" />
+                        AI Evaluation Summary
+                      </h4>
+                      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border-l-4 border-blue-500">
+                        <p className="text-sm leading-relaxed">
+                          {row.original.evaluationDetails.evaluation_summary}
+                        </p>
                       </div>
                     </CardContent>
                   </Card>
                 )}
+
+                {/* Strengths and Improvements */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Key Strengths */}
+                  {row.original.evaluationDetails?.key_strengths && row.original.evaluationDetails.key_strengths.length > 0 && (
+                    <Card>
+                      <CardContent className="p-4">
+                        <h4 className="font-semibold mb-3 flex items-center gap-2 text-green-700 dark:text-green-400">
+                          <IconTrendingUp className="h-4 w-4" />
+                          Key Strengths
+                        </h4>
+                        <ul className="space-y-2">
+                          {row.original.evaluationDetails.key_strengths.map((strength: string, index: number) => (
+                            <li key={index} className="flex items-start gap-2 text-sm">
+                              <IconCircleCheckFilled className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
+                              <span>{strength}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Areas for Improvement */}
+                  {row.original.evaluationDetails?.improvement_areas && row.original.evaluationDetails.improvement_areas.length > 0 && (
+                    <Card>
+                      <CardContent className="p-4">
+                        <h4 className="font-semibold mb-3 flex items-center gap-2 text-orange-700 dark:text-orange-400">
+                          <IconTrendingDown className="h-4 w-4" />
+                          Areas for Development
+                        </h4>
+                        <ul className="space-y-2">
+                          {row.original.evaluationDetails.improvement_areas.map((area: string, index: number) => (
+                            <li key={index} className="flex items-start gap-2 text-sm">
+                              <IconMinus className="h-4 w-4 text-orange-500 flex-shrink-0 mt-0.5" />
+                              <span>{area}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+
+                {/* Recommendation */}
+                {row.original.evaluationDetails?.recommendation && (
+                  <Card>
+                    <CardContent className="p-4">
+                      <h4 className="font-semibold mb-4 flex items-center gap-2">
+                        <IconStar className="h-4 w-4" />
+                        Hiring Recommendation
+                      </h4>
+                      <div className={`p-4 rounded-lg border-l-4 ${
+                        row.original.evaluationDetails.recommendation === 'STRONG_MATCH' 
+                          ? 'bg-green-50 dark:bg-green-900/20 border-green-500' 
+                          : row.original.evaluationDetails.recommendation === 'GOOD_MATCH'
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500'
+                          : row.original.evaluationDetails.recommendation === 'FAIR_MATCH'
+                          ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-500'
+                          : 'bg-red-50 dark:bg-red-900/20 border-red-500'
+                      }`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge className={`${
+                            row.original.evaluationDetails.recommendation === 'STRONG_MATCH'
+                              ? 'bg-green-100 text-green-800'
+                              : row.original.evaluationDetails.recommendation === 'GOOD_MATCH'
+                              ? 'bg-blue-100 text-blue-800'
+                              : row.original.evaluationDetails.recommendation === 'FAIR_MATCH'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {row.original.evaluationDetails.recommendation.replace('_', ' ')}
+                          </Badge>
+                          <span className="text-sm font-medium">Overall Score: {row.original.overallScore}%</span>
+                        </div>
+                        <p className="text-sm">
+                          {row.original.evaluationDetails.recommendation === 'STRONG_MATCH' 
+                            ? '✅ This candidate is an excellent fit for the position with strong alignment across multiple criteria.'
+                            : row.original.evaluationDetails.recommendation === 'GOOD_MATCH'
+                            ? '👍 This candidate shows good potential with some areas that align well with the job requirements.'
+                            : row.original.evaluationDetails.recommendation === 'FAIR_MATCH'
+                            ? '⚠️ This candidate has some relevant qualifications but may need additional training or development.'
+                            : '❌ This candidate does not meet the minimum requirements for this position at this time.'
+                          }
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Processing Information */}
+                <Card>
+                  <CardContent className="p-4">
+                    <h4 className="font-semibold mb-3 flex items-center gap-2">
+                      <IconBrain className="h-4 w-4" />
+                      Analysis Details
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="font-medium text-gray-700 dark:text-gray-300">Model Used:</span>
+                        <p className="text-gray-600 dark:text-gray-400">{row.original.evaluationDetails?.ai_model || 'GPT-4.1'}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700 dark:text-gray-300">Analyzed:</span>
+                        <p className="text-gray-600 dark:text-gray-400">{new Date(row.original.evaluatedAt).toLocaleDateString()}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700 dark:text-gray-300">Processing Time:</span>
+                        <p className="text-gray-600 dark:text-gray-400">{row.original.evaluationDetails?.processing_time_ms ? `${(row.original.evaluationDetails.processing_time_ms / 1000).toFixed(1)}s` : 'N/A'}</p>
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700 dark:text-gray-300">File Name:</span>
+                        <p className="text-gray-600 dark:text-gray-400 truncate" title={row.original.evaluationDetails?.file_name}>
+                          {row.original.evaluationDetails?.file_name || 'Resume.pdf'}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
               
-              <DrawerFooter>
+              <DrawerFooter className="flex-shrink-0 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div className="flex gap-2">
                   {row.original.resume_url && (
                     <Button variant="outline">

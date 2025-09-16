@@ -137,25 +137,12 @@ export function JobPostingsTable({ data }: JobPostingsTableProps) {
         accessorKey: "title",
         header: "Job Title",
         cell: ({ row }) => (
-          <div className="flex items-center gap-3">
-            <Link 
-              href={`/job-postings/${row.original.id}/candidates`}
-              className="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
-            >
-              {row.getValue("title")}
-            </Link>
-            <Button
-              asChild
-              variant="ghost" 
-              size="sm"
-              className="h-8 px-3 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-800 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-300"
-            >
-              <Link href={`/job-postings/${row.original.id}/candidates`}>
-                <IconUsers className="h-4 w-4 mr-1" />
-                View Candidates
-              </Link>
-            </Button>
-          </div>
+          <Link 
+            href={`/job-postings/${row.original.id}/candidates`}
+            className="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+          >
+            {row.getValue("title")}
+          </Link>
         ),
       },
       {
