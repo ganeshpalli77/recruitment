@@ -20,21 +20,16 @@ import {
   IconChevronsLeft,
   IconChevronsRight,
   IconDotsVertical,
-  IconEdit,
-  IconTrash,
   IconEye,
   IconClock,
   IconCheck,
-  IconX,
   IconPlayerPause,
   IconBrain,
   IconStar,
-  IconMapPin,
-  IconBriefcase,
   IconTags,
-  IconFileText,
-  IconClipboardList,
   IconUsers,
+  IconCalendar,
+  IconArrowsUpDown,
 } from "@tabler/icons-react"
 import Link from "next/link"
 
@@ -58,8 +53,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-
-import { updateJobPostingStatus, deleteJobPosting } from '@/app/job-postings/actions'
 
 export type JobPosting = {
   id: string
@@ -91,7 +84,7 @@ export type JobPosting = {
   } | null
 }
 
-interface JobPostingsTableProps {
+interface CandidatesJobPostingsTableProps {
   data: JobPosting[]
 }
 
@@ -102,7 +95,7 @@ const getStatusIcon = (status: string) => {
     case 'paused':
       return <IconPlayerPause className="h-4 w-4" />
     case 'closed':
-      return <IconX className="h-4 w-4" />
+      return <IconClock className="h-4 w-4" />
     case 'draft':
       return <IconClock className="h-4 w-4" />
     default:
@@ -113,19 +106,19 @@ const getStatusIcon = (status: string) => {
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'active':
-      return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+      return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 border-green-300'
     case 'paused':
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
+      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 border-yellow-300'
     case 'closed':
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300 border-gray-300'
     case 'draft':
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 border-blue-300'
     default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300 border-gray-300'
   }
 }
 
-export function JobPostingsTable({ data }: JobPostingsTableProps) {
+export function CandidatesJobPostingsTable({ data }: CandidatesJobPostingsTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
@@ -135,65 +128,83 @@ export function JobPostingsTable({ data }: JobPostingsTableProps) {
     () => [
       {
         accessorKey: "title",
-        header: "Job Title",
-        cell: ({ row }) => (
-          <div className="flex items-center gap-3">
-            <Link 
-              href={`/job-postings/${row.original.id}/candidates`}
-              className="font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
-            >
-              {row.getValue("title")}
-            </Link>
+        header: ({ column }) => {
+          return (
             <Button
-              asChild
-              variant="ghost" 
-              size="sm"
-              className="h-8 px-3 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-800 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-300"
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+              className="hover:bg-transparent p-0 h-auto font-medium"
             >
-              <Link href={`/job-postings/${row.original.id}/candidates`}>
-                <IconUsers className="h-4 w-4 mr-1" />
-                View Candidates
-              </Link>
+              Job Title
+              <IconArrowsUpDown className="ml-2 h-4 w-4" />
             </Button>
-          </div>
+          )
+        },
+        cell: ({ row }) => (
+          <Link 
+            href={`/job-postings/${row.original.id}/candidates`}
+            className="font-semibold text-purple-700 dark:text-purple-400 hover:text-purple-900 dark:hover:text-purple-300 transition-colors"
+          >
+            {row.getValue("title")}
+          </Link>
         ),
       },
       {
         accessorKey: "experience_required",
-        header: "Min Experience",
+        header: ({ column }) => {
+          return (
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+              className="hover:bg-transparent p-0 h-auto font-medium"
+            >
+              Experience
+              <IconArrowsUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          )
+        },
         cell: ({ row }) => (
-          <div className="text-center">
-            {row.getValue("experience_required")} years
+          <div className="flex items-center gap-2">
+            <IconClock className="h-4 w-4 text-gray-500" />
+            <span>{row.getValue("experience_required")} years</span>
           </div>
         ),
       },
       {
         accessorKey: "ai_analysis_status",
-        header: "AI Analysis",
+        header: "AI Insights",
         cell: ({ row }) => {
           const hasAnalysis = row.original.ai_analysis
           const difficultyScore = row.original.ai_analysis?.difficulty_score
-          const confidenceScore = row.original.ai_analysis?.confidence_score
+          const keySkillsCount = row.original.ai_analysis?.key_skills?.length || 0
 
           return (
-            <div className="text-center">
+            <div className="flex flex-col gap-1">
               {hasAnalysis ? (
-                <div className="flex flex-col items-center gap-1">
-                  <Badge className="bg-green-100 text-green-800 border-green-300 text-xs">
+                <>
+                  <Badge className="bg-green-100 text-green-800 border-green-300 text-xs w-fit">
                     <IconBrain className="h-3 w-3 mr-1" />
                     Analyzed
                   </Badge>
-                  {difficultyScore && (
-                    <div className="flex items-center gap-1">
-                      <IconStar className="h-3 w-3 text-yellow-500" />
-                      <span className="text-xs text-gray-600">{difficultyScore}/10</span>
-                    </div>
-                  )}
-                </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-600">
+                    {difficultyScore && (
+                      <div className="flex items-center gap-1">
+                        <IconStar className="h-3 w-3 text-yellow-500" />
+                        <span>{difficultyScore}/10</span>
+                      </div>
+                    )}
+                    {keySkillsCount > 0 && (
+                      <div className="flex items-center gap-1">
+                        <IconTags className="h-3 w-3 text-blue-500" />
+                        <span>{keySkillsCount} skills</span>
+                      </div>
+                    )}
+                  </div>
+                </>
               ) : (
-                <Badge variant="outline" className="text-xs text-gray-500">
+                <Badge variant="outline" className="text-xs text-gray-500 w-fit">
                   <IconClock className="h-3 w-3 mr-1" />
-                  Pending
+                  Processing
                 </Badge>
               )}
             </div>
@@ -218,15 +229,27 @@ export function JobPostingsTable({ data }: JobPostingsTableProps) {
       },
       {
         accessorKey: "created_at",
-        header: "Created",
+        header: ({ column }) => {
+          return (
+            <Button
+              variant="ghost"
+              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+              className="hover:bg-transparent p-0 h-auto font-medium"
+            >
+              Posted
+              <IconArrowsUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          )
+        },
         cell: ({ row }) => {
           const dateString = row.getValue("created_at") as string
-          // Use consistent ISO format to avoid hydration mismatches
           try {
             const date = new Date(dateString)
+            // Use consistent ISO format to avoid hydration mismatches
             const formattedDate = date.toISOString().split('T')[0]
             return (
-              <div className="text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <IconCalendar className="h-4 w-4 text-gray-500" />
                 {formattedDate}
               </div>
             )
@@ -258,47 +281,21 @@ export function JobPostingsTable({ data }: JobPostingsTableProps) {
                 <DropdownMenuItem asChild>
                   <Link href={`/job-postings/${job.id}/candidates`} className="flex w-full items-center">
                     <IconUsers className="mr-2 h-4 w-4" />
-                    View Candidates
+                    Manage Candidates
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href={`/job-postings/${job.id}/candidates`} className="flex w-full items-center">
+                    <IconUsers className="mr-2 h-4 w-4" />
+                    Upload Resumes
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <IconEdit className="mr-2 h-4 w-4" />
-                  Edit
-                </DropdownMenuItem>
-                {job.status === 'active' && (
                 <DropdownMenuItem asChild>
-                  <form action={updateJobPostingStatus}>
-                    <input type="hidden" name="id" value={job.id} />
-                    <input type="hidden" name="status" value="paused" />
-                    <button type="submit" className="flex w-full items-center">
-                      <IconPlayerPause className="mr-2 h-4 w-4" />
-                      Pause
-                    </button>
-                  </form>
-                </DropdownMenuItem>
-                )}
-                {job.status === 'paused' && (
-                  <DropdownMenuItem asChild>
-                    <form action={updateJobPostingStatus}>
-                      <input type="hidden" name="id" value={job.id} />
-                      <input type="hidden" name="status" value="active" />
-                      <button type="submit" className="flex w-full items-center">
-                        <IconCheck className="mr-2 h-4 w-4" />
-                        Activate
-                      </button>
-                    </form>
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <form action={deleteJobPosting}>
-                    <input type="hidden" name="id" value={job.id} />
-                    <button type="submit" className="flex w-full items-center text-red-600">
-                      <IconTrash className="mr-2 h-4 w-4" />
-                      Delete
-                    </button>
-                  </form>
+                  <Link href={`/job-postings/${job.id}`} className="flex w-full items-center text-purple-600">
+                    <IconEye className="mr-2 h-4 w-4" />
+                    View Job Details
+                  </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -335,9 +332,9 @@ export function JobPostingsTable({ data }: JobPostingsTableProps) {
 
   return (
     <div className="w-full">
-      <div className="flex items-center py-4">
+      <div className="flex items-center py-4 gap-4">
         <Input
-          placeholder="Filter jobs..."
+          placeholder="Search job titles..."
           value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
           onChange={(event) =>
             table.getColumn("title")?.setFilterValue(event.target.value)
@@ -397,6 +394,7 @@ export function JobPostingsTable({ data }: JobPostingsTableProps) {
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
+                  className="hover:bg-purple-50/50 dark:hover:bg-purple-950/20"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>

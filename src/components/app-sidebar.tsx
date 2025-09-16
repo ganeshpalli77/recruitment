@@ -52,7 +52,7 @@ const data = {
     },
     {
       title: "Candidates",
-      url: "/dashboard",
+      url: "/candidates",
       icon: IconUsers,
     },
     {
