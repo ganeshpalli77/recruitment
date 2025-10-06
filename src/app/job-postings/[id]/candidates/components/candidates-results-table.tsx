@@ -35,7 +35,12 @@ import {
   IconTrendingDown,
   IconMinus,
   IconTags,
+  IconCheck,
+  IconX,
 } from "@tabler/icons-react"
+import { toast } from "sonner"
+import { shortlistCandidate, removeShortlist } from '../lib/actions'
+import { useRouter } from 'next/navigation'
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -134,12 +139,101 @@ const getStatusIcon = (status: string) => {
 }
 
 export function CandidatesResultsTable({ candidates, jobId }: CandidatesResultsTableProps) {
+  const router = useRouter()
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: 'overallScore', desc: true } // Default sort by overall score descending
   ])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
+  const [shortlistedIds, setShortlistedIds] = React.useState<Set<string>>(new Set())
+  const [processingIds, setProcessingIds] = React.useState<Set<string>>(new Set())
+
+  // Fetch shortlisted candidates
+  React.useEffect(() => {
+    const fetchShortlisted = async () => {
+      try {
+        const { createClient } = await import('@/lib/supabase/client')
+        const supabase = createClient()
+        
+        const { data } = await supabase
+          .from('interview_selected_students')
+          .select('resume_result_id')
+          .eq('job_posting_id', jobId)
+        
+        if (data) {
+          setShortlistedIds(new Set(data.map(item => item.resume_result_id)))
+        }
+      } catch (error) {
+        console.error('Error fetching shortlisted candidates:', error)
+      }
+    }
+    
+    fetchShortlisted()
+  }, [jobId])
+
+  const handleShortlist = async (candidate: CandidateData) => {
+    const resumeResultId = candidate.evaluationId
+    setProcessingIds(prev => new Set(prev).add(resumeResultId))
+
+    try {
+      const result = await shortlistCandidate(jobId, resumeResultId, {
+        name: candidate.name,
+        email: candidate.email,
+        phone: candidate.phone,
+        overallScore: candidate.overallScore,
+        skillsScore: candidate.skillsScore,
+        experienceScore: candidate.experienceScore,
+        educationScore: candidate.educationScore,
+        recommendation: candidate.evaluationDetails?.recommendation || null
+      })
+
+      if (result.success) {
+        setShortlistedIds(prev => new Set(prev).add(resumeResultId))
+        toast.success(`${candidate.name} shortlisted for interview!`)
+        router.refresh()
+      } else {
+        toast.error(result.error || 'Failed to shortlist candidate')
+      }
+    } catch (error) {
+      toast.error('An error occurred')
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(resumeResultId)
+        return newSet
+      })
+    }
+  }
+
+  const handleRemoveShortlist = async (candidate: CandidateData) => {
+    const resumeResultId = candidate.evaluationId
+    setProcessingIds(prev => new Set(prev).add(resumeResultId))
+
+    try {
+      const result = await removeShortlist(jobId, resumeResultId)
+
+      if (result.success) {
+        setShortlistedIds(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(resumeResultId)
+          return newSet
+        })
+        toast.success(`${candidate.name} removed from shortlist`)
+        router.refresh()
+      } else {
+        toast.error(result.error || 'Failed to remove from shortlist')
+      }
+    } catch (error) {
+      toast.error('An error occurred')
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(resumeResultId)
+        return newSet
+      })
+    }
+  }
 
   // Add rank based on sort order
   const rankedCandidates = React.useMemo(() => {
@@ -593,40 +687,68 @@ export function CandidatesResultsTable({ candidates, jobId }: CandidatesResultsT
         id: "actions",
         enableHiding: false,
         cell: ({ row }) => {
+          const candidate = row.original
+          const isShortlisted = shortlistedIds.has(candidate.evaluationId)
+          const isProcessing = processingIds.has(candidate.evaluationId)
+
           return (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8 p-0">
-                  <span className="sr-only">Open menu</span>
-                  <IconDotsVertical className="h-4 w-4" />
+            <div className="flex items-center gap-2 justify-end">
+              {isShortlisted ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRemoveShortlist(candidate)}
+                  disabled={isProcessing}
+                  className="border-green-200 bg-green-50 text-green-700 hover:bg-green-100 hover:text-green-800"
+                >
+                  <IconCheck className="h-4 w-4 mr-1" />
+                  Shortlisted
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuItem>
-                  <IconEye className="mr-2 h-4 w-4" />
-                  View Details
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                {row.original.resume_url && (
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleShortlist(candidate)}
+                  disabled={isProcessing}
+                  className="border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800"
+                >
+                  <IconStar className="h-4 w-4 mr-1" />
+                  Shortlist
+                </Button>
+              )}
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="h-8 w-8 p-0">
+                    <span className="sr-only">Open menu</span>
+                    <IconDotsVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
                   <DropdownMenuItem>
-                    <IconDownload className="mr-2 h-4 w-4" />
-                    Download Resume
+                    <IconEye className="mr-2 h-4 w-4" />
+                    View Details
                   </DropdownMenuItem>
-                )}
-                <DropdownMenuItem>
-                  Schedule Interview
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  Add to Shortlist
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuSeparator />
+                  {candidate.resume_url && (
+                    <DropdownMenuItem>
+                      <IconDownload className="mr-2 h-4 w-4" />
+                      Download Resume
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem>
+                    <IconClock className="mr-2 h-4 w-4" />
+                    Schedule Interview
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           )
         },
       },
     ],
-    []
+    [shortlistedIds, processingIds, handleShortlist, handleRemoveShortlist]
   )
 
   const table = useReactTable({

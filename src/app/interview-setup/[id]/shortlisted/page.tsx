@@ -9,26 +9,22 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
 import {
   IconArrowLeft,
-  IconBriefcase,
-  IconClock,
-  IconSettings,
-  IconCheck,
-  IconDeviceFloppy,
-  IconStar,
   IconUsers,
+  IconStar,
+  IconTrophy,
+  IconCalendar,
+  IconCheck,
 } from "@tabler/icons-react"
 import Link from "next/link"
-import { InterviewSettingsForm } from "./components/interview-settings-form"
-import { ShortlistedTable } from "./components/shortlisted-table"
+import { ShortlistedCandidatesTable } from "./components/shortlisted-candidates-table"
 
 interface PageProps {
   params: Promise<{ id: string }>
 }
 
-export default async function InterviewSettingsPage({ params }: PageProps) {
+export default async function ShortlistedCandidatesPage({ params }: PageProps) {
   const { id } = await params
   const supabase = await createClient()
 
@@ -49,44 +45,7 @@ export default async function InterviewSettingsPage({ params }: PageProps) {
     redirect('/interview-setup')
   }
 
-  // Fetch interview settings from separate table
-  let { data: interviewSetup, error: settingsError } = await supabase
-    .from('interview_setup')
-    .select('*')
-    .eq('job_posting_id', id)
-    .single()
-
-  // If no settings exist, create default settings
-  if (!interviewSetup) {
-    const { data: newSettings } = await supabase
-      .from('interview_setup')
-      .insert({
-        job_posting_id: id,
-        duration: 30,
-        interview_type: 'video',
-        rounds: 1,
-        notifications_enabled: true
-      })
-      .select()
-      .single()
-    
-    interviewSetup = newSettings
-  }
-
-  // Map database fields to component format
-  const currentSettings = {
-    duration: interviewSetup?.duration || 30,
-    interviewType: interviewSetup?.interview_type || 'video',
-    rounds: interviewSetup?.rounds || 1,
-    interviewers: interviewSetup?.interviewers || [],
-    location: interviewSetup?.location || '',
-    meetingLink: interviewSetup?.meeting_link || '',
-    notificationsEnabled: interviewSetup?.notifications_enabled !== false,
-    timeSlots: interviewSetup?.time_slots || [],
-    bufferTime: interviewSetup?.buffer_time || 15
-  }
-
-  // Fetch shortlisted candidates for this job
+  // Fetch shortlisted candidates
   const { data: shortlistedCandidates, error: candidatesError } = await supabase
     .from('interview_selected_students')
     .select('*')
@@ -136,49 +95,36 @@ export default async function InterviewSettingsPage({ params }: PageProps) {
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
                   <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl">
-                      <IconSettings className="h-6 w-6 text-white" />
+                    <div className="p-2 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl">
+                      <IconStar className="h-6 w-6 text-white" />
                     </div>
-                    Interview Settings
+                    Shortlisted Candidates
                   </h1>
                   <p className="text-gray-600 dark:text-gray-300">
-                    Configure interview preferences for this position
+                    Selected candidates for {jobPosting.title}
                   </p>
                 </div>
+                <Badge className="bg-green-100 text-green-800 border-green-300 text-lg px-4 py-1">
+                  <IconCheck className="h-4 w-4 mr-1" />
+                  {candidates.length} Shortlisted
+                </Badge>
               </div>
-
-
-              {/* Settings Form */}
-              <InterviewSettingsForm 
-                jobId={id}
-                currentSettings={currentSettings}
-              />
 
               {/* Shortlisted Candidates Table */}
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <div className="p-2 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg">
-                          <IconStar className="h-4 w-4 text-white" />
-                        </div>
-                        Shortlisted Candidates
-                      </CardTitle>
-                      <CardDescription className="mt-1">
-                        Candidates ready for interview scheduling
-                      </CardDescription>
-                    </div>
-                    <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-300">
-                      <IconCheck className="h-3 w-3 mr-1" />
-                      {candidates.length} shortlisted
-                    </Badge>
-                  </div>
+                  <CardTitle className="flex items-center gap-2">
+                    <IconTrophy className="h-5 w-5 text-amber-500" />
+                    Interview-Ready Candidates
+                  </CardTitle>
+                  <CardDescription>
+                    These candidates have been shortlisted and are ready for interview scheduling
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
                   {candidates.length > 0 ? (
-                    <ShortlistedTable 
-                      data={candidates}
+                    <ShortlistedCandidatesTable 
+                      candidates={candidates}
                       jobId={id}
                     />
                   ) : (

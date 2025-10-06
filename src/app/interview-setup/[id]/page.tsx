@@ -23,8 +23,10 @@ import {
   IconPhone,
   IconMapPin,
   IconSparkles,
+  IconCheck,
 } from "@tabler/icons-react"
 import Link from "next/link"
+import { ShortlistedTable } from "./components/shortlisted-table"
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -51,32 +53,18 @@ export default async function InterviewSetupJobPage({ params }: PageProps) {
     redirect('/interview-setup')
   }
 
-  // Fetch top-ranked candidates for this job
-  const { data: topCandidates, error: candidatesError } = await supabase
-    .from('resume_results')
+  // Fetch shortlisted candidates for this job
+  const { data: shortlistedCandidates, error: candidatesError } = await supabase
+    .from('interview_selected_students')
     .select('*')
     .eq('job_posting_id', id)
-    .eq('processing_status', 'completed')
     .order('overall_score', { ascending: false })
-    .limit(10)
 
   if (candidatesError) {
-    console.error('Error fetching candidates:', candidatesError)
+    console.error('Error fetching shortlisted candidates:', candidatesError)
   }
 
-  const candidates = topCandidates?.map(result => ({
-    id: result.id,
-    name: result.candidate_name || 'Unknown',
-    email: result.candidate_email || '',
-    phone: result.candidate_phone || '',
-    overallScore: result.overall_score || 0,
-    skillsScore: result.skills_score || 0,
-    experienceScore: result.experience_score || 0,
-    educationScore: result.education_score || 0,
-    recommendation: result.recommendation,
-    skills_matched: result.skills_matched || [],
-    experience_details: result.experience_details || {},
-  })) || []
+  const candidates = shortlistedCandidates || []
 
   const getRecommendationColor = (recommendation: string) => {
     switch (recommendation) {
@@ -204,130 +192,52 @@ export default async function InterviewSetupJobPage({ params }: PageProps) {
                 </CardContent>
               </Card>
 
-              {/* Top Candidates Section */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                    <IconUsers className="h-5 w-5" />
-                    Top Candidates for Interview
-                  </h2>
-                  <Button asChild variant="outline">
-                    <Link href={`/job-postings/${id}/candidates`}>
-                      View All Candidates
-                    </Link>
-                  </Button>
-                </div>
-
-                {candidates.length > 0 ? (
-                  <div className="grid gap-4">
-                    {candidates.map((candidate, index) => (
-                      <Card key={candidate.id} className="hover:shadow-md transition-shadow">
-                        <CardContent className="p-6">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 space-y-3">
-                              {/* Candidate Header */}
-                              <div className="flex items-center gap-3">
-                                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white font-semibold">
-                                  #{index + 1}
-                                </div>
-                                <div className="flex-1">
-                                  <h3 className="text-lg font-semibold">{candidate.name}</h3>
-                                  <div className="flex items-center gap-4 text-sm text-gray-600">
-                                    {candidate.email && (
-                                      <span className="flex items-center gap-1">
-                                        📧 {candidate.email}
-                                      </span>
-                                    )}
-                                    {candidate.phone && (
-                                      <span className="flex items-center gap-1">
-                                        <IconPhone className="h-3 w-3" />
-                                        {candidate.phone}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Scores */}
-                              <div className="grid grid-cols-4 gap-4">
-                                <div className="space-y-1">
-                                  <div className="text-xs text-gray-500">Overall</div>
-                                  <div className="text-2xl font-bold text-purple-600">
-                                    {candidate.overallScore}
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <div className="text-xs text-gray-500">Skills</div>
-                                  <div className="text-lg font-semibold">
-                                    {candidate.skillsScore}
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <div className="text-xs text-gray-500">Experience</div>
-                                  <div className="text-lg font-semibold">
-                                    {candidate.experienceScore}
-                                  </div>
-                                </div>
-                                <div className="space-y-1">
-                                  <div className="text-xs text-gray-500">Education</div>
-                                  <div className="text-lg font-semibold">
-                                    {candidate.educationScore}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Matched Skills */}
-                              {candidate.skills_matched && candidate.skills_matched.length > 0 && (
-                                <div className="flex flex-wrap gap-1">
-                                  {candidate.skills_matched.slice(0, 6).map((skill: string, idx: number) => (
-                                    <Badge key={idx} variant="outline" className="text-xs">
-                                      ✓ {skill}
-                                    </Badge>
-                                  ))}
-                                  {candidate.skills_matched.length > 6 && (
-                                    <Badge variant="outline" className="text-xs">
-                                      +{candidate.skills_matched.length - 6}
-                                    </Badge>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Actions */}
-                            <div className="flex flex-col gap-2 ml-4">
-                              <Badge className={getRecommendationColor(candidate.recommendation)}>
-                                {candidate.recommendation?.replace('_', ' ')}
-                              </Badge>
-                              <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white whitespace-nowrap">
-                                <IconCalendarPlus className="h-4 w-4 mr-1" />
-                                Schedule
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+              {/* Shortlisted Candidates Section */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <div className="p-2 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg">
+                          <IconStar className="h-4 w-4 text-white" />
+                        </div>
+                        Shortlisted Candidates
+                      </CardTitle>
+                      <CardDescription className="mt-1">
+                        Candidates selected for interview scheduling
+                      </CardDescription>
+                    </div>
+                    <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-300">
+                      <IconCheck className="h-3 w-3 mr-1" />
+                      {candidates.length} shortlisted
+                    </Badge>
                   </div>
-                ) : (
-                  <Card>
-                    <CardContent className="flex flex-col items-center justify-center py-12">
-                      <IconUsers className="h-16 w-16 text-gray-400 mb-4" />
+                </CardHeader>
+                <CardContent className="p-0">
+                  {candidates.length > 0 ? (
+                    <ShortlistedTable 
+                      data={candidates}
+                      jobId={id}
+                    />
+                  ) : (
+                    <div className="text-center py-12 px-6">
+                      <IconUsers className="h-16 w-16 text-gray-400 mx-auto mb-4" />
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                        No candidates yet
+                        No shortlisted candidates yet
                       </h3>
-                      <p className="text-gray-600 dark:text-gray-300 mb-4 text-center max-w-md">
-                        Upload and evaluate resumes to see candidates here.
+                      <p className="text-gray-600 dark:text-gray-300 mb-6 max-w-md mx-auto">
+                        Go to the candidates page and click "Shortlist" on candidates you want to interview.
                       </p>
-                      <Button asChild className="bg-green-600 hover:bg-green-700 text-white">
+                      <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white">
                         <Link href={`/job-postings/${id}/candidates`}>
                           <IconUsers className="h-4 w-4 mr-2" />
-                          Go to Candidates
+                          View All Candidates
                         </Link>
                       </Button>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Quick Actions */}
               <Card className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border-purple-200">
@@ -339,17 +249,23 @@ export default async function InterviewSetupJobPage({ params }: PageProps) {
                 </CardHeader>
                 <CardContent>
                   <div className="grid gap-3 md:grid-cols-3">
-                    <Button variant="outline" className="justify-start">
-                      <IconCalendarPlus className="h-4 w-4 mr-2" />
-                      Schedule Batch Interviews
+                    <Button asChild variant="outline" className="justify-start">
+                      <Link href={`/interview-setup/${id}/shortlisted`}>
+                        <IconStar className="h-4 w-4 mr-2" />
+                        View Shortlisted
+                      </Link>
                     </Button>
-                    <Button variant="outline" className="justify-start">
-                      <IconVideo className="h-4 w-4 mr-2" />
-                      Setup Video Links
+                    <Button asChild variant="outline" className="justify-start">
+                      <Link href={`/interview-setup/${id}/settings`}>
+                        <IconCalendarPlus className="h-4 w-4 mr-2" />
+                        Interview Settings
+                      </Link>
                     </Button>
-                    <Button variant="outline" className="justify-start">
-                      <IconMapPin className="h-4 w-4 mr-2" />
-                      Set Interview Location
+                    <Button asChild variant="outline" className="justify-start">
+                      <Link href={`/job-postings/${id}/candidates`}>
+                        <IconUsers className="h-4 w-4 mr-2" />
+                        All Candidates
+                      </Link>
                     </Button>
                   </div>
                 </CardContent>

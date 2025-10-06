@@ -81,6 +81,12 @@ export default async function JobCandidatesPage({ params, searchParams }: PagePr
     console.error('Error fetching candidates:', candidatesError)
   }
 
+  // Fetch shortlisted count
+  const { count: shortlistedCount } = await supabase
+    .from('interview_selected_students')
+    .select('*', { count: 'exact', head: true })
+    .eq('job_posting_id', id)
+
   const candidates = resumeResults?.map(result => ({
     id: result.id,
     evaluationId: result.id,
@@ -163,6 +169,14 @@ export default async function JobCandidatesPage({ params, searchParams }: PagePr
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  {shortlistedCount && shortlistedCount > 0 && (
+                    <Button asChild variant="outline" className="border-green-200 bg-green-50 text-green-700 hover:bg-green-100">
+                      <Link href={`/interview-setup/${id}/shortlisted`}>
+                        <IconCheck className="h-4 w-4 mr-1" />
+                        {shortlistedCount} Shortlisted
+                      </Link>
+                    </Button>
+                  )}
                   <UploadButton jobId={id} />
                   {candidates.length > 0 && (
                     <FixNamesButton jobId={id} />
