@@ -56,8 +56,8 @@ const data = {
       icon: IconUsers,
     },
     {
-      title: "Analytics",
-      url: "#",
+      title: "Interview Setup",
+      url: "/interview-setup",
       icon: IconChartBar,
     },
     {
