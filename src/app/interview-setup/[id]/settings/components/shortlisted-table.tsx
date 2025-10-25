@@ -25,7 +25,11 @@ import {
   IconCalendarPlus,
   IconClock,
   IconCheck,
+  IconLoader2,
 } from "@tabler/icons-react"
+import { toast } from "sonner"
+import { generateInterviewQuestions } from '../lib/generate-questions'
+import { useRouter } from 'next/navigation'
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -95,12 +99,53 @@ const getRecommendationColor = (recommendation: string | null) => {
 }
 
 export function ShortlistedTable({ data, jobId }: ShortlistedTableProps) {
+  const router = useRouter()
   const [sorting, setSorting] = React.useState<SortingState>([
     { id: 'overall_score', desc: true }
   ])
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
+  const [generatingFor, setGeneratingFor] = React.useState<string | null>(null)
+
+  const handleScheduleInterview = async (candidate: ShortlistedCandidate & { rank: number }) => {
+    setGeneratingFor(candidate.id)
+    
+    try {
+      toast.info(`Generating interview questions for ${candidate.candidate_name}...`)
+      
+      const result = await generateInterviewQuestions({
+        candidateId: candidate.id,
+        candidateName: candidate.candidate_name,
+        jobId: jobId
+      })
+
+      if (result.success) {
+        toast.success(
+          `Successfully generated ${result.data?.totalQuestions} interview questions!`,
+          {
+            description: `Starting interview... ${result.data?.distribution.screening} screening, ${result.data?.distribution.technical} technical, ${result.data?.distribution.hr} HR questions`
+          }
+        )
+        
+        // Navigate to interview screen
+        setTimeout(() => {
+          router.push(`/interview/${result.data?.questionId}`)
+        }, 1500)
+      } else {
+        toast.error('Failed to generate questions', {
+          description: result.error || 'An unexpected error occurred'
+        })
+      }
+    } catch (error) {
+      console.error('Error generating questions:', error)
+      toast.error('Failed to generate questions', {
+        description: error instanceof Error ? error.message : 'An unexpected error occurred'
+      })
+    } finally {
+      setGeneratingFor(null)
+    }
+  }
 
   const rankedCandidates = React.useMemo(() => {
     return data.map((candidate, index) => ({
@@ -232,21 +277,33 @@ export function ShortlistedTable({ data, jobId }: ShortlistedTableProps) {
         id: "actions",
         enableHiding: false,
         cell: ({ row }) => {
+          const isGenerating = generatingFor === row.original.id
           return (
             <div className="text-right">
               <Button
                 size="sm"
                 className="bg-purple-600 hover:bg-purple-700 text-white"
+                onClick={() => handleScheduleInterview(row.original)}
+                disabled={isGenerating || generatingFor !== null}
               >
-                <IconCalendarPlus className="h-4 w-4 mr-1" />
-                Schedule
+                {isGenerating ? (
+                  <>
+                    <IconLoader2 className="h-4 w-4 mr-1 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <IconCalendarPlus className="h-4 w-4 mr-1" />
+                    Schedule
+                  </>
+                )}
               </Button>
             </div>
           )
         },
       },
     ],
-    []
+    [generatingFor]
   )
 
   const table = useReactTable({

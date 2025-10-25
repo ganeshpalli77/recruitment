@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner"
 import { updateInterviewSettings } from '../lib/actions'
 import { cn } from "@/lib/utils"
+import { QuestionDistribution } from './question-distribution'
 
 interface InterviewSettingsFormProps {
   jobId: string
@@ -26,6 +27,9 @@ interface InterviewSettingsFormProps {
     notificationsEnabled: boolean
     timeSlots?: any[]
     bufferTime?: number
+    screeningRoundPercentage?: number
+    technicalRoundPercentage?: number
+    hrRoundPercentage?: number
   }
 }
 
@@ -39,7 +43,16 @@ const DURATION_OPTIONS = [
 export function InterviewSettingsForm({ jobId, currentSettings }: InterviewSettingsFormProps) {
   const router = useRouter()
   const [duration, setDuration] = useState(String(currentSettings.duration))
+  const [screeningPercentage, setScreeningPercentage] = useState(currentSettings.screeningRoundPercentage || 30)
+  const [technicalPercentage, setTechnicalPercentage] = useState(currentSettings.technicalRoundPercentage || 50)
+  const [hrPercentage, setHrPercentage] = useState(currentSettings.hrRoundPercentage || 20)
   const [isSaving, setIsSaving] = useState(false)
+
+  const handleDistributionChange = (screening: number, technical: number, hr: number) => {
+    setScreeningPercentage(screening)
+    setTechnicalPercentage(technical)
+    setHrPercentage(hr)
+  }
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -47,6 +60,9 @@ export function InterviewSettingsForm({ jobId, currentSettings }: InterviewSetti
       const updatedSettings = {
         ...currentSettings,
         duration: parseInt(duration),
+        screeningRoundPercentage: screeningPercentage,
+        technicalRoundPercentage: technicalPercentage,
+        hrRoundPercentage: hrPercentage,
       }
 
       const result = await updateInterviewSettings(jobId, updatedSettings)
@@ -65,9 +81,14 @@ export function InterviewSettingsForm({ jobId, currentSettings }: InterviewSetti
     }
   }
 
-  const hasChanges = parseInt(duration) !== currentSettings.duration
+  const hasChanges = 
+    parseInt(duration) !== currentSettings.duration ||
+    screeningPercentage !== (currentSettings.screeningRoundPercentage || 30) ||
+    technicalPercentage !== (currentSettings.technicalRoundPercentage || 50) ||
+    hrPercentage !== (currentSettings.hrRoundPercentage || 20)
 
   return (
+    <div className="space-y-4">
     <Card className="w-full">
       <CardHeader className="border-b bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950">
         <div className="flex items-center justify-between">
@@ -154,5 +175,14 @@ export function InterviewSettingsForm({ jobId, currentSettings }: InterviewSetti
         </div>
       </CardContent>
     </Card>
+
+    {/* Question Distribution Section */}
+    <QuestionDistribution
+      screeningPercentage={screeningPercentage}
+      technicalPercentage={technicalPercentage}
+      hrPercentage={hrPercentage}
+      onDistributionChange={handleDistributionChange}
+    />
+    </div>
   )
 }

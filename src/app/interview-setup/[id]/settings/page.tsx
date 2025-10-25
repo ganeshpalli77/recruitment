@@ -83,7 +83,10 @@ export default async function InterviewSettingsPage({ params }: PageProps) {
     meetingLink: interviewSetup?.meeting_link || '',
     notificationsEnabled: interviewSetup?.notifications_enabled !== false,
     timeSlots: interviewSetup?.time_slots || [],
-    bufferTime: interviewSetup?.buffer_time || 15
+    bufferTime: interviewSetup?.buffer_time || 15,
+    screeningRoundPercentage: interviewSetup?.screening_round_percentage || 30,
+    technicalRoundPercentage: interviewSetup?.technical_round_percentage || 50,
+    hrRoundPercentage: interviewSetup?.hr_round_percentage || 20
   }
 
   // Fetch shortlisted candidates for this job

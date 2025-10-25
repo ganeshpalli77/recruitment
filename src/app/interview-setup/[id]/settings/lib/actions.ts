@@ -15,6 +15,9 @@ export async function updateInterviewSettings(
     notificationsEnabled: boolean
     timeSlots?: any[]
     bufferTime?: number
+    screeningRoundPercentage?: number
+    technicalRoundPercentage?: number
+    hrRoundPercentage?: number
   }
 ) {
   try {
@@ -43,6 +46,9 @@ export async function updateInterviewSettings(
           notifications_enabled: settings.notificationsEnabled,
           time_slots: settings.timeSlots || [],
           buffer_time: settings.bufferTime || 15,
+          screening_round_percentage: settings.screeningRoundPercentage || 30,
+          technical_round_percentage: settings.technicalRoundPercentage || 50,
+          hr_round_percentage: settings.hrRoundPercentage || 20,
           updated_at: new Date().toISOString()
         })
         .eq('job_posting_id', jobId)
@@ -60,7 +66,10 @@ export async function updateInterviewSettings(
           meeting_link: settings.meetingLink || null,
           notifications_enabled: settings.notificationsEnabled,
           time_slots: settings.timeSlots || [],
-          buffer_time: settings.bufferTime || 15
+          buffer_time: settings.bufferTime || 15,
+          screening_round_percentage: settings.screeningRoundPercentage || 30,
+          technical_round_percentage: settings.technicalRoundPercentage || 50,
+          hr_round_percentage: settings.hrRoundPercentage || 20
         })
     }
 

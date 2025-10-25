@@ -350,3 +350,37 @@ class OpenAIService:
                 return ' '.join(word.capitalize() for word in words)
         
         return "Unknown Candidate"
+    
+    async def generate_text(self, prompt: str, temperature: float = 0.7, max_tokens: int = 1500) -> str:
+        """
+        Generate text using Azure OpenAI with a custom prompt
+        
+        Args:
+            prompt: The prompt to send to the model
+            temperature: Creativity level (0.0 to 1.0)
+            max_tokens: Maximum tokens to generate
+            
+        Returns:
+            Generated text response
+        """
+        try:
+            response = self.client.chat.completions.create(
+                model=self.deployment_name,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
+            
+            generated_text = response.choices[0].message.content
+            logger.info("Successfully generated text from Azure OpenAI")
+            
+            return generated_text
+            
+        except Exception as e:
+            logger.error(f"Error generating text: {str(e)}")
+            raise e

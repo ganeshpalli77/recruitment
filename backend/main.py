@@ -35,6 +35,10 @@ from models.resume_evaluation import (
     ResumeRankingResponse,
     EvaluationStatistics
 )
+from models.interview_questions import (
+    InterviewQuestionGenerationRequest,
+    InterviewQuestionGenerationResponse
+)
 from utils.logger import setup_logging
 
 # Load environment variables
@@ -673,6 +677,145 @@ async def process_batch_in_background(job_posting_id: str, resumes: List[Dict[st
         
     except Exception as e:
         logger.error(f"Error in background batch processing: {str(e)}")
+
+# ============================================================================
+# Interview Question Generation Endpoint
+# ============================================================================
+
+@app.post("/api/generate-interview-questions", response_model=InterviewQuestionGenerationResponse)
+@limiter.limit("20 per minute")
+async def generate_interview_questions(
+    request: Request,
+    question_request: InterviewQuestionGenerationRequest
+):
+    """
+    Generate interview questions based on job description and requirements.
+    Questions are distributed across screening, technical, and HR rounds.
+    """
+    start_time = datetime.now()
+    
+    try:
+        logger.info(f"Generating {question_request.screening_count + question_request.technical_count + question_request.hr_count} interview questions for {question_request.job_title}")
+        
+        # Prepare context from job analysis
+        job_context = f"""
+Job Title: {question_request.job_title}
+
+Job Description:
+{question_request.job_description}
+
+Requirements:
+{question_request.job_requirements}
+
+Required Skills: {', '.join(question_request.skills_required)}
+"""
+        
+        if question_request.ai_analysis:
+            job_context += f"\n\nAI Analysis Insights:\n{question_request.ai_analysis}"
+        
+        # Generate screening questions
+        screening_prompt = f"""You are an expert interviewer creating screening questions for a {question_request.duration}-minute interview.
+
+{job_context}
+
+Generate EXACTLY {question_request.screening_count} screening round questions that assess:
+- Basic qualifications and background
+- Cultural fit and motivation
+- Communication skills
+- General understanding of the role
+
+Requirements:
+1. Questions should be open-ended
+2. Focus on getting to know the candidate
+3. Each question should be clear and direct
+4. Return ONLY the questions, one per line
+5. Do not number the questions
+6. Do not add any explanations or commentary
+
+Generate {question_request.screening_count} questions now:"""
+
+        # Get OpenAI service instance
+        openai_svc = get_openai_service()
+        
+        screening_response = await openai_svc.generate_text(screening_prompt, temperature=0.7)
+        screening_questions = [q.strip() for q in screening_response.split('\n') if q.strip() and not q.strip().startswith('#')]
+        screening_questions = screening_questions[:question_request.screening_count]
+        
+        # Generate technical questions
+        technical_prompt = f"""You are an expert technical interviewer creating technical questions for a {question_request.duration}-minute interview.
+
+{job_context}
+
+Generate EXACTLY {question_request.technical_count} technical round questions that assess:
+- Technical skills and expertise
+- Problem-solving abilities  
+- Relevant experience with required technologies
+- Depth of knowledge in key areas
+
+Requirements:
+1. Questions should be specific to the job requirements
+2. Mix of theoretical and practical questions
+3. Progressive difficulty levels
+4. Each question should be clear and direct
+5. Return ONLY the questions, one per line
+6. Do not number the questions
+7. Do not add any explanations or commentary
+
+Generate {question_request.technical_count} questions now:"""
+
+        technical_response = await openai_svc.generate_text(technical_prompt, temperature=0.7)
+        technical_questions = [q.strip() for q in technical_response.split('\n') if q.strip() and not q.strip().startswith('#')]
+        technical_questions = technical_questions[:question_request.technical_count]
+        
+        # Generate HR questions
+        hr_prompt = f"""You are an expert HR interviewer creating behavioral and soft-skill questions for a {question_request.duration}-minute interview.
+
+{job_context}
+
+Generate EXACTLY {question_request.hr_count} HR round questions that assess:
+- Leadership and teamwork
+- Conflict resolution
+- Career goals and aspirations
+- Work ethic and values
+- Adaptability and learning mindset
+
+Requirements:
+1. Use behavioral interview techniques (STAR method compatible)
+2. Questions should reveal personality and soft skills
+3. Each question should be clear and direct
+4. Return ONLY the questions, one per line
+5. Do not number the questions
+6. Do not add any explanations or commentary
+
+Generate {question_request.hr_count} questions now:"""
+
+        hr_response = await openai_svc.generate_text(hr_prompt, temperature=0.7)
+        hr_questions = [q.strip() for q in hr_response.split('\n') if q.strip() and not q.strip().startswith('#')]
+        hr_questions = hr_questions[:question_request.hr_count]
+        
+        # Calculate generation time
+        end_time = datetime.now()
+        generation_time_ms = int((end_time - start_time).total_seconds() * 1000)
+        
+        total_questions = len(screening_questions) + len(technical_questions) + len(hr_questions)
+        
+        logger.info(f"Successfully generated {total_questions} questions in {generation_time_ms}ms")
+        
+        return InterviewQuestionGenerationResponse(
+            screening_questions=screening_questions,
+            technical_questions=technical_questions,
+            hr_questions=hr_questions,
+            total_questions=total_questions,
+            model=settings.azure_openai_deployment_name,
+            generation_time_ms=generation_time_ms
+        )
+        
+    except Exception as e:
+        logger.error(f"Error generating interview questions: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate interview questions: {str(e)}"
+        )
 
 if __name__ == "__main__":
     import uvicorn
