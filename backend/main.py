@@ -24,6 +24,7 @@ from config import get_settings
 from services.openai_service import OpenAIService
 from services.supabase_service import SupabaseService
 from services.resume_evaluation_service import ResumeEvaluationService
+from services.interview_analysis_service import InterviewAnalysisService
 from models.job_analysis import JobAnalysisRequest, JobAnalysisResponse, AnalysisResult
 from models.resume_evaluation import (
     ResumeUploadRequest,
@@ -38,6 +39,10 @@ from models.resume_evaluation import (
 from models.interview_questions import (
     InterviewQuestionGenerationRequest,
     InterviewQuestionGenerationResponse
+)
+from models.interview_analysis import (
+    InterviewAnalysisRequest,
+    InterviewAnalysisResponse
 )
 from utils.logger import setup_logging
 
@@ -83,6 +88,7 @@ app.add_middleware(
 openai_service = None
 supabase_service = None
 resume_evaluation_service = None
+interview_analysis_service = None
 
 # Processing queue for batch operations
 processing_queue = asyncio.Queue(maxsize=1000)
@@ -104,6 +110,13 @@ def get_resume_evaluation_service():
     if resume_evaluation_service is None:
         resume_evaluation_service = ResumeEvaluationService()
     return resume_evaluation_service
+
+def get_interview_analysis_service():
+    global interview_analysis_service
+    if interview_analysis_service is None:
+        openai_svc = get_openai_service()
+        interview_analysis_service = InterviewAnalysisService(openai_svc)
+    return interview_analysis_service
 
 @app.get("/")
 async def root():
@@ -815,6 +828,75 @@ Generate {question_request.hr_count} questions now:"""
         raise HTTPException(
             status_code=500,
             detail=f"Failed to generate interview questions: {str(e)}"
+        )
+
+# ============================================================================
+# Interview Analysis Endpoint
+# ============================================================================
+
+@app.post("/api/analyze-interview", response_model=InterviewAnalysisResponse)
+@limiter.limit("10 per minute")
+async def analyze_interview(
+    request: Request,
+    analysis_request: InterviewAnalysisRequest
+):
+    """
+    Analyze interview transcript and provide detailed scoring and feedback.
+    Scores each question-answer pair (1-5) and provides overall assessment.
+    """
+    start_time = datetime.now()
+    
+    try:
+        logger.info(f"Starting analysis for candidate: {analysis_request.candidate_name}")
+        
+        # Get interview analysis service
+        analysis_svc = get_interview_analysis_service()
+        
+        # Perform analysis
+        analysis_result = await analysis_svc.analyze_interview(analysis_request)
+        
+        # Store results in Supabase
+        supabase_svc = get_supabase_service()
+        
+        # Prepare data for database (mapping to existing schema)
+        db_record = {
+            'candidate_id': analysis_request.candidate_id,
+            'candidate_name': analysis_request.candidate_name,
+            'job_posting_id': analysis_request.job_posting_id,
+            'job_title': analysis_request.job_title,
+            'interview_duration': analysis_request.interview_duration,
+            'question_analyses': [qa.dict() for qa in analysis_result.question_analyses],
+            'overall_score': analysis_result.overall_analysis.overall_score,
+            'average_score': analysis_result.average_score,
+            'total_questions': analysis_result.total_questions,
+            'overall_analysis': analysis_result.overall_analysis.summary,  # Maps to overall_analysis column
+            'summary': analysis_result.overall_analysis.summary,  # Also store in new column if exists
+            'strengths': analysis_result.overall_analysis.key_strengths,  # Maps to strengths column
+            'key_strengths': analysis_result.overall_analysis.key_strengths,  # Also store in new column if exists
+            'areas_for_improvement': analysis_result.overall_analysis.key_weaknesses,  # Maps to areas_for_improvement
+            'key_weaknesses': analysis_result.overall_analysis.key_weaknesses,  # Also store in new column if exists
+            'recommendation': analysis_result.overall_analysis.recommendation,
+            'confidence_level': analysis_result.overall_analysis.confidence_level,
+            'communication_quality': analysis_result.overall_analysis.communication_quality,
+            'ai_model': analysis_result.analysis_model,
+            'analyzed_at': datetime.now().isoformat()
+        }
+        
+        # Insert into database
+        response = supabase_svc.client.table('interview_results').insert(db_record).execute()
+        
+        end_time = datetime.now()
+        analysis_time_ms = int((end_time - start_time).total_seconds() * 1000)
+        
+        logger.info(f"Analysis completed in {analysis_time_ms}ms. Overall score: {analysis_result.overall_analysis.overall_score}/5")
+        
+        return analysis_result
+        
+    except Exception as e:
+        logger.error(f"Error analyzing interview: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to analyze interview: {str(e)}"
         )
 
 if __name__ == "__main__":

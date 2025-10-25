@@ -31,7 +31,9 @@ export default async function InterviewPage({ params }: PageProps) {
   return (
     <ElevenLabsProvider>
       <InterviewScreen 
+        candidateId={interviewData.candidate_id}
         candidateName={interviewData.candidate_name}
+        jobPostingId={interviewData.job_posting_id}
         duration={interviewData.interview_duration}
         greetingMessage={interviewData.greeting_message}
         screeningQuestions={interviewData.screening_questions}

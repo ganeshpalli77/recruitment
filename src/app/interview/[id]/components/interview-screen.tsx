@@ -16,9 +16,13 @@ import {
 } from "@tabler/icons-react"
 import { useConversation } from '@elevenlabs/react'
 import { toast } from 'sonner'
+import { analyzeInterview } from '../lib/analyze-interview'
+import { useRouter } from 'next/navigation'
 
 interface InterviewScreenProps {
+  candidateId: string
   candidateName: string
+  jobPostingId: string
   duration: number // in minutes
   greetingMessage: string
   screeningQuestions: string[]
@@ -28,7 +32,9 @@ interface InterviewScreenProps {
 }
 
 export function InterviewScreen({
+  candidateId,
   candidateName,
+  jobPostingId,
   duration,
   greetingMessage,
   screeningQuestions,
@@ -43,6 +49,8 @@ export function InterviewScreen({
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [currentRound, setCurrentRound] = useState<'greeting' | 'screening' | 'technical' | 'hr'>('greeting')
   const [agentId, setAgentId] = useState<string | null>(null)
+  const [interviewStarted, setInterviewStarted] = useState(false)
+  const [currentAIQuestion, setCurrentAIQuestion] = useState<string>('')
   const [conversationTranscript, setConversationTranscript] = useState<Array<{
     role: 'ai' | 'user'
     message: string
@@ -52,6 +60,7 @@ export function InterviewScreen({
   const aiVideoRef = useRef<HTMLVideoElement>(null)
   const candidateVideoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const router = useRouter()
 
   // Expose transcript to console for debugging
   useEffect(() => {
@@ -116,6 +125,8 @@ export function InterviewScreen({
       // Log separately for easy identification
       if (message.source === 'ai') {
         console.log('🎯 AI QUESTION:', message.message)
+        // Update current question display
+        setCurrentAIQuestion(message.message)
       } else {
         console.log('✅ CANDIDATE RESPONSE:', message.message)
       }
@@ -235,6 +246,8 @@ Start with the greeting and proceed through all questions systematically.`,
       }
 
       setAgentId(conversationId)
+      setInterviewStarted(true) // Start the timer
+      setCurrentAIQuestion(greetingMessage) // Set initial greeting
       
       toast.success('Interview started!', {
         description: 'The AI interviewer is ready. Speak clearly into your microphone.'
@@ -284,7 +297,7 @@ Start with the greeting and proceed through all questions systematically.`,
   }
 
   // End the interview
-  const stopAIInterview = () => {
+  const stopAIInterview = async () => {
     // Log complete transcript before ending
     if (conversationTranscript.length > 0) {
       logCompleteTranscript()
@@ -292,9 +305,21 @@ Start with the greeting and proceed through all questions systematically.`,
     
     endSession()
     setAgentId(null)
-    toast.info('Interview ended', {
-      description: 'Check console for complete transcript'
-    })
+    
+    // Store interview data in sessionStorage for the analyzing page
+    const interviewData = {
+      candidateId: candidateId,
+      candidateName: candidateName,
+      jobPostingId: jobPostingId,
+      jobTitle: jobTitle,
+      interviewDuration: duration,
+      transcript: conversationTranscript
+    }
+    
+    sessionStorage.setItem('pendingInterviewAnalysis', JSON.stringify(interviewData))
+    
+    // Redirect to analyzing page
+    router.push(`/interview/${candidateId}/analyzing?name=${encodeURIComponent(candidateName)}&job=${encodeURIComponent(jobTitle)}`)
   }
 
   // All questions combined
@@ -311,9 +336,9 @@ Start with the greeting and proceed through all questions systematically.`,
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
   }
 
-  // Countdown timer
+  // Countdown timer - only starts after interview begins
   useEffect(() => {
-    if (isPaused || timeLeft <= 0) return
+    if (!interviewStarted || isPaused || timeLeft <= 0) return
 
     const timer = setInterval(() => {
       setTimeLeft(prev => {
@@ -326,7 +351,7 @@ Start with the greeting and proceed through all questions systematically.`,
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [isPaused, timeLeft])
+  }, [interviewStarted, isPaused, timeLeft])
 
   // Initialize camera
   useEffect(() => {
@@ -382,25 +407,32 @@ Start with the greeting and proceed through all questions systematically.`,
 
   // Get current question to display
   const getCurrentQuestion = () => {
-    if (currentRound === 'greeting') {
+    // If interview started and we have an AI question, show it
+    if (interviewStarted && currentAIQuestion) {
+      return currentAIQuestion
+    }
+    // Before interview starts, show greeting message as preview
+    if (!interviewStarted) {
       return greetingMessage
     }
-    return allQuestions[currentQuestionIndex]?.text || ''
+    // Fallback to waiting message
+    return 'Waiting for AI interviewer...'
   }
 
   const getCurrentRoundName = () => {
-    if (currentRound === 'greeting') return 'Greeting'
-    return allQuestions[currentQuestionIndex]?.type || ''
+    if (!interviewStarted) return 'Preview'
+    if (!currentAIQuestion) return 'Connecting'
+    
+    // Try to determine round from the transcript
+    const aiQuestions = conversationTranscript.filter(t => t.role === 'ai')
+    const questionCount = aiQuestions.length
+    
+    if (questionCount === 0) return 'Greeting'
+    if (questionCount <= screeningQuestions.length) return 'Screening'
+    if (questionCount <= screeningQuestions.length + technicalQuestions.length) return 'Technical'
+    return 'HR Round'
   }
 
-  const nextQuestion = () => {
-    if (currentRound === 'greeting') {
-      setCurrentRound('screening')
-      setCurrentQuestionIndex(0)
-    } else if (currentQuestionIndex < allQuestions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1)
-    }
-  }
 
   const progress = ((duration * 60 - timeLeft) / (duration * 60)) * 100
 
@@ -420,7 +452,7 @@ Start with the greeting and proceed through all questions systematically.`,
         
         <div className="flex items-center gap-3 sm:gap-6">
           {/* Start Interview Button */}
-          {!agentId && (
+          {!agentId ? (
             <Button
               size="default"
               onClick={startAIInterview}
@@ -429,6 +461,17 @@ Start with the greeting and proceed through all questions systematically.`,
               <IconMicrophone className="h-4 w-4 mr-2" />
               <span className="hidden sm:inline">Start AI Interview</span>
               <span className="sm:hidden">Start</span>
+            </Button>
+          ) : (
+            <Button
+              size="default"
+              variant="destructive"
+              onClick={stopAIInterview}
+              className="shadow-lg"
+            >
+              <IconX className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">End Interview</span>
+              <span className="sm:hidden">End</span>
             </Button>
           )}
           
@@ -490,18 +533,6 @@ Start with the greeting and proceed through all questions systematically.`,
           </div>
 
           <div className="absolute bottom-2 sm:bottom-4 right-2 sm:right-4 flex gap-2">
-            {agentId && (
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={stopAIInterview}
-                className="opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <IconX className="h-4 w-4 mr-1" />
-                <span className="hidden sm:inline">End Interview</span>
-              </Button>
-            )}
-            
             {status === 'connected' && (
               <Badge className="bg-green-600 text-white border-0 opacity-0 group-hover:opacity-100 transition-opacity">
                 <span className="flex items-center gap-1">
@@ -580,7 +611,9 @@ Start with the greeting and proceed through all questions systematically.`,
                 {getCurrentRoundName().toUpperCase()}
               </Badge>
               <span className="text-xs sm:text-sm text-gray-600">
-                Question {currentRound === 'greeting' ? 'Greeting' : `${currentQuestionIndex + 1} of ${allQuestions.length}`}
+                {conversationTranscript.filter(t => t.role === 'ai').length > 0 
+                  ? `Question ${conversationTranscript.filter(t => t.role === 'ai').length}`
+                  : 'Current Question'}
               </span>
             </div>
             
@@ -590,28 +623,14 @@ Start with the greeting and proceed through all questions systematically.`,
           </div>
 
           <div className="flex gap-2 w-full sm:w-auto justify-end">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setIsPaused(!isPaused)}
-              className="bg-gray-100 hover:bg-gray-200"
-            >
-              {isPaused ? (
-                <IconPlayerPlay className="h-4 w-4" />
-              ) : (
-                <IconPlayerPause className="h-4 w-4" />
-              )}
-            </Button>
-            
-            <Button
-              onClick={nextQuestion}
-              disabled={currentQuestionIndex >= allQuestions.length - 1 && currentRound !== 'greeting'}
-              className="bg-blue-600 hover:bg-blue-700 text-white text-sm sm:text-base"
-              size="sm"
-            >
-              <span className="hidden sm:inline">Next Question</span>
-              <span className="sm:hidden">Next</span>
-            </Button>
+            {isSpeaking && (
+              <Badge className="bg-green-600 text-white border-0 animate-pulse">
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-white"></span>
+                  AI Speaking
+                </span>
+              </Badge>
+            )}
           </div>
         </div>
       </Card>
