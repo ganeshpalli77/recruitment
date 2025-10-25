@@ -154,21 +154,21 @@ export function InterviewScreen({
   return (
     <div className="h-screen w-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-50 flex flex-col overflow-hidden">
       {/* Top Header */}
-      <div className="flex items-center justify-between px-8 py-4 bg-white/80 backdrop-blur-sm border-b border-gray-200">
-        <div className="flex items-center gap-4">
-          <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-lg">
+      <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-3 sm:py-4 bg-white/80 backdrop-blur-sm border-b border-gray-200">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className="h-8 w-8 sm:h-10 sm:w-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm sm:text-lg">
             {candidateName.charAt(0).toUpperCase()}
           </div>
           <div>
-            <h1 className="text-xl font-bold text-gray-900">{candidateName}</h1>
-            <p className="text-sm text-gray-600">{jobTitle}</p>
+            <h1 className="text-sm sm:text-lg lg:text-xl font-bold text-gray-900">{candidateName}</h1>
+            <p className="text-xs sm:text-sm text-gray-600 hidden sm:block">{jobTitle}</p>
           </div>
         </div>
         
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3 sm:gap-6">
           <div className="text-right">
-            <p className="text-xs text-gray-500 uppercase tracking-wide">Time Left</p>
-            <p className={`text-3xl font-bold tabular-nums ${
+            <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wide hidden sm:block">Time Left</p>
+            <p className={`text-xl sm:text-2xl lg:text-3xl font-bold tabular-nums ${
               timeLeft < 60 ? 'text-red-600' : 'text-blue-600'
             }`}>
               {formatTime(timeLeft)}
@@ -179,7 +179,7 @@ export function InterviewScreen({
             variant="ghost"
             size="sm"
             onClick={() => window.close()}
-            className="text-gray-500 hover:text-gray-900"
+            className="text-gray-500 hover:text-gray-900 hidden sm:flex"
           >
             <IconX className="h-5 w-5" />
           </Button>
@@ -189,11 +189,11 @@ export function InterviewScreen({
       <Progress value={progress} className="h-1" />
 
       {/* Main Content */}
-      <div className="flex-1 grid grid-cols-2 gap-4 p-4 overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-4 p-2 sm:p-4 overflow-auto lg:overflow-hidden">
         {/* Left: AI Interviewer Video */}
-        <Card className="bg-white/80 backdrop-blur-sm border-gray-200 overflow-hidden relative group shadow-lg">
-          <div className="absolute top-4 left-4 z-10">
-            <Badge className="bg-blue-600 text-white border-0">
+        <Card className="bg-white/80 backdrop-blur-sm border-gray-200 overflow-hidden relative group shadow-lg h-[40vh] lg:h-full">
+          <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10">
+            <Badge className="bg-blue-600 text-white border-0 text-xs sm:text-sm">
               AI Interviewer
             </Badge>
           </div>
@@ -233,9 +233,9 @@ export function InterviewScreen({
         </Card>
 
         {/* Right: Camera Feed */}
-        <Card className="bg-white/80 backdrop-blur-sm border-gray-200 overflow-hidden relative group shadow-lg">
-          <div className="absolute top-4 left-4 z-10">
-            <Badge className="bg-blue-600 text-white border-0">
+        <Card className="bg-white/80 backdrop-blur-sm border-gray-200 overflow-hidden relative group shadow-lg h-[40vh] lg:h-full">
+          <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10">
+            <Badge className="bg-blue-600 text-white border-0 text-xs sm:text-sm">
               Your Camera
             </Badge>
           </div>
@@ -291,24 +291,24 @@ export function InterviewScreen({
       </div>
 
       {/* Bottom: Interview Questions */}
-      <Card className="mx-4 mb-4 bg-white/80 backdrop-blur-sm border-gray-200 p-6 shadow-lg">
-        <div className="flex items-start justify-between gap-6">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-3">
-              <Badge className="bg-blue-600 text-white border-0">
+      <Card className="mx-2 sm:mx-4 mb-2 sm:mb-4 bg-white/80 backdrop-blur-sm border-gray-200 p-3 sm:p-4 lg:p-6 shadow-lg">
+        <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-6">
+          <div className="flex-1 w-full">
+            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3 flex-wrap">
+              <Badge className="bg-blue-600 text-white border-0 text-xs sm:text-sm">
                 {getCurrentRoundName().toUpperCase()}
               </Badge>
-              <span className="text-sm text-gray-600">
+              <span className="text-xs sm:text-sm text-gray-600">
                 Question {currentRound === 'greeting' ? 'Greeting' : `${currentQuestionIndex + 1} of ${allQuestions.length}`}
               </span>
             </div>
             
-            <p className="text-lg text-gray-900 leading-relaxed">
+            <p className="text-sm sm:text-base lg:text-lg text-gray-900 leading-relaxed">
               {getCurrentQuestion()}
             </p>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 w-full sm:w-auto justify-end">
             <Button
               variant="secondary"
               size="sm"
@@ -325,9 +325,11 @@ export function InterviewScreen({
             <Button
               onClick={nextQuestion}
               disabled={currentQuestionIndex >= allQuestions.length - 1 && currentRound !== 'greeting'}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm sm:text-base"
+              size="sm"
             >
-              Next Question
+              <span className="hidden sm:inline">Next Question</span>
+              <span className="sm:hidden">Next</span>
             </Button>
           </div>
         </div>

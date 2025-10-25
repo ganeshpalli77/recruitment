@@ -26,6 +26,8 @@ import {
   IconClock,
   IconCheck,
   IconLoader2,
+  IconLink,
+  IconCopy,
 } from "@tabler/icons-react"
 import { toast } from "sonner"
 import { generateInterviewQuestions } from '../lib/generate-questions'
@@ -107,6 +109,18 @@ export function ShortlistedTable({ data, jobId }: ShortlistedTableProps) {
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = React.useState({})
   const [generatingFor, setGeneratingFor] = React.useState<string | null>(null)
+  const [candidateLinks, setCandidateLinks] = React.useState<Record<string, string>>({})
+
+  const handleCopyLink = (candidateId: string, candidateName: string) => {
+    const link = candidateLinks[candidateId]
+    if (link) {
+      navigator.clipboard.writeText(link).then(() => {
+        toast.success('Interview link copied!', {
+          description: `You can now share this link with ${candidateName}`,
+        })
+      })
+    }
+  }
 
   const handleScheduleInterview = async (candidate: ShortlistedCandidate & { rank: number }) => {
     setGeneratingFor(candidate.id)
@@ -121,17 +135,32 @@ export function ShortlistedTable({ data, jobId }: ShortlistedTableProps) {
       })
 
       if (result.success) {
-        toast.success(
-          `Successfully generated ${result.data?.totalQuestions} interview questions!`,
-          {
-            description: `Starting interview... ${result.data?.distribution.screening} screening, ${result.data?.distribution.technical} technical, ${result.data?.distribution.hr} HR questions`
-          }
-        )
+        const interviewLink = `${window.location.origin}/interview/${result.data?.questionId}`
         
-        // Navigate to interview screen
-        setTimeout(() => {
-          router.push(`/interview/${result.data?.questionId}`)
-        }, 1500)
+        // Store link in state
+        setCandidateLinks(prev => ({
+          ...prev,
+          [candidate.id]: interviewLink
+        }))
+        
+        // Copy link to clipboard
+        navigator.clipboard.writeText(interviewLink).then(() => {
+          toast.success(
+            `Interview questions generated successfully!`,
+            {
+              description: `Interview link copied to clipboard. Share it with ${candidate.candidate_name}.`,
+              duration: 8000,
+            }
+          )
+        }).catch(() => {
+          toast.success(
+            `Interview questions generated!`,
+            {
+              description: `Link: ${interviewLink}`,
+              duration: 10000,
+            }
+          )
+        })
       } else {
         toast.error('Failed to generate questions', {
           description: result.error || 'An unexpected error occurred'
@@ -278,32 +307,45 @@ export function ShortlistedTable({ data, jobId }: ShortlistedTableProps) {
         enableHiding: false,
         cell: ({ row }) => {
           const isGenerating = generatingFor === row.original.id
+          const hasLink = candidateLinks[row.original.id]
+          
           return (
-            <div className="text-right">
-              <Button
-                size="sm"
-                className="bg-purple-600 hover:bg-purple-700 text-white"
-                onClick={() => handleScheduleInterview(row.original)}
-                disabled={isGenerating || generatingFor !== null}
-              >
-                {isGenerating ? (
-                  <>
-                    <IconLoader2 className="h-4 w-4 mr-1 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <IconCalendarPlus className="h-4 w-4 mr-1" />
-                    Schedule
-                  </>
-                )}
-              </Button>
+            <div className="text-right flex gap-2 justify-end">
+              {hasLink ? (
+                <Button
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => handleCopyLink(row.original.id, row.original.candidate_name)}
+                >
+                  <IconCopy className="h-4 w-4 mr-1" />
+                  Copy Link
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                  onClick={() => handleScheduleInterview(row.original)}
+                  disabled={isGenerating || generatingFor !== null}
+                >
+                  {isGenerating ? (
+                    <>
+                      <IconLoader2 className="h-4 w-4 mr-1 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <IconCalendarPlus className="h-4 w-4 mr-1" />
+                      Schedule
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
           )
         },
       },
     ],
-    [generatingFor]
+    [generatingFor, candidateLinks]
   )
 
   const table = useReactTable({
