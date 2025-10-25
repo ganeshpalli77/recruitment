@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import {
+  IconBrain,
   IconCamera,
   IconChartBar,
   IconDashboard,
@@ -62,8 +63,8 @@ const data = {
     },
     {
       title: "AI Evaluation",
-      url: "#",
-      icon: IconFileAi,
+      url: "/ai-evaluation",
+      icon: IconBrain,
     },
   ],
   navClouds: [

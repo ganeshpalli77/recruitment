@@ -17,7 +17,9 @@ import {
 import { useConversation } from '@elevenlabs/react'
 import { toast } from 'sonner'
 import { analyzeInterview } from '../lib/analyze-interview'
+import { uploadRecordingClient } from '../lib/upload-recording-client'
 import { useRouter } from 'next/navigation'
+import { useScreenRecording } from '../hooks/useScreenRecording'
 
 interface InterviewScreenProps {
   candidateId: string
@@ -51,6 +53,8 @@ export function InterviewScreen({
   const [agentId, setAgentId] = useState<string | null>(null)
   const [interviewStarted, setInterviewStarted] = useState(false)
   const [currentAIQuestion, setCurrentAIQuestion] = useState<string>('')
+  const [recordingBlob, setRecordingBlob] = useState<Blob | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
   const [conversationTranscript, setConversationTranscript] = useState<Array<{
     role: 'ai' | 'user'
     message: string
@@ -60,7 +64,19 @@ export function InterviewScreen({
   const aiVideoRef = useRef<HTMLVideoElement>(null)
   const candidateVideoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const recordingBlobRef = useRef<Blob | null>(null)
   const router = useRouter()
+  
+  // Screen recording hook
+  const { isRecording, startRecording, stopRecording } = useScreenRecording({
+    onRecordingComplete: (videoBlob) => {
+      console.log('📹 Recording complete, saving blob...')
+      console.log(`📊 Blob size: ${(videoBlob.size / 1024 / 1024).toFixed(2)} MB`)
+      console.log(`⏰ Blob ready at: ${new Date().toISOString().split('T')[1]}`)
+      setRecordingBlob(videoBlob)
+      recordingBlobRef.current = videoBlob // Store in ref immediately
+    }
+  })
 
   // Expose transcript to console for debugging
   useEffect(() => {
@@ -191,7 +207,18 @@ Start with the greeting and proceed through all questions systematically.`,
   // Start AI interview with voice
   const startAIInterview = async () => {
     try {
-      // Request microphone permission first
+      // Start screen recording first
+      console.log('🎬 Starting screen recording...')
+      const recordingStarted = await startRecording()
+      
+      if (!recordingStarted) {
+        toast.error('Screen recording required', {
+          description: 'You must allow screen recording to proceed with the interview'
+        })
+        return
+      }
+      
+      // Request microphone permission
       await navigator.mediaDevices.getUserMedia({ audio: true })
       
       // Get Eleven Labs Agent ID from environment
@@ -250,7 +277,7 @@ Start with the greeting and proceed through all questions systematically.`,
       setCurrentAIQuestion(greetingMessage) // Set initial greeting
       
       toast.success('Interview started!', {
-        description: 'The AI interviewer is ready. Speak clearly into your microphone.'
+        description: 'Recording in progress. Speak clearly into your microphone.'
       })
     } catch (error) {
       console.error('Error starting AI interview:', error)
@@ -306,6 +333,10 @@ Start with the greeting and proceed through all questions systematically.`,
     endSession()
     setAgentId(null)
     
+    // Stop screen recording
+    console.log('⏹️ Stopping screen recording...')
+    stopRecording()
+    
     // Store interview data in sessionStorage for the analyzing page
     const interviewData = {
       candidateId: candidateId,
@@ -313,13 +344,75 @@ Start with the greeting and proceed through all questions systematically.`,
       jobPostingId: jobPostingId,
       jobTitle: jobTitle,
       interviewDuration: duration,
-      transcript: conversationTranscript
+      transcript: conversationTranscript,
+      hasRecording: isRecording
     }
     
     sessionStorage.setItem('pendingInterviewAnalysis', JSON.stringify(interviewData))
     
-    // Redirect to analyzing page
-    router.push(`/interview/${candidateId}/analyzing?name=${encodeURIComponent(candidateName)}&job=${encodeURIComponent(jobTitle)}`)
+    // Show uploading state
+    setIsUploading(true)
+    toast.info('Uploading interview recording...', {
+      description: 'Please wait while we save your video',
+      duration: 60000 // Long duration
+    })
+    
+    // Wait for blob to be ready
+    console.log('⏳ Waiting for recording blob...')
+    await new Promise(resolve => setTimeout(resolve, 2000))
+    
+    const finalBlob = recordingBlobRef.current
+    
+    if (finalBlob) {
+      console.log('📤 Uploading recording to Supabase...')
+      console.log(`📊 Recording size: ${(finalBlob.size / 1024 / 1024).toFixed(2)} MB`)
+      
+      const videoFile = new File([finalBlob], `interview_${candidateId}.webm`, { type: 'video/webm' })
+      
+      try {
+        const result = await uploadRecordingClient(candidateId, candidateName, jobPostingId, videoFile)
+        
+        if (result.success) {
+          console.log('✅ Recording uploaded:', result.videoUrl)
+          toast.success('Video uploaded successfully!', {
+            description: 'Redirecting to results...'
+          })
+          
+          // Wait a moment then redirect
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          router.push(`/interview/${candidateId}/analyzing?name=${encodeURIComponent(candidateName)}&job=${encodeURIComponent(jobTitle)}`)
+        } else {
+          console.error('❌ Upload failed:', result.error)
+          toast.error('Upload failed', {
+            description: result.error || 'Could not save recording. Proceeding anyway...'
+          })
+          
+          // Still redirect even if upload fails
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          router.push(`/interview/${candidateId}/analyzing?name=${encodeURIComponent(candidateName)}&job=${encodeURIComponent(jobTitle)}`)
+        }
+      } catch (error) {
+        console.error('❌ Upload error:', error)
+        toast.error('Upload error', {
+          description: 'Failed to upload recording. Proceeding anyway...'
+        })
+        
+        // Still redirect even if upload fails
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        router.push(`/interview/${candidateId}/analyzing?name=${encodeURIComponent(candidateName)}&job=${encodeURIComponent(jobTitle)}`)
+      }
+    } else {
+      console.warn('⚠️ No recording blob available')
+      toast.warning('No recording captured', {
+        description: 'Proceeding without video...'
+      })
+      
+      // Redirect anyway
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      router.push(`/interview/${candidateId}/analyzing?name=${encodeURIComponent(candidateName)}&job=${encodeURIComponent(jobTitle)}`)
+    }
+    
+    setIsUploading(false)
   }
 
   // All questions combined
@@ -436,8 +529,85 @@ Start with the greeting and proceed through all questions systematically.`,
 
   const progress = ((duration * 60 - timeLeft) / (duration * 60)) * 100
 
+// Countdown timer - only starts after interview begins
+useEffect(() => {
+  if (!interviewStarted || isPaused || timeLeft <= 0) return
+
+  const timer = setInterval(() => {
+    setTimeLeft(prev => {
+      if (prev <= 1) {
+        clearInterval(timer)
+        return 0
+      }
+      return prev - 1
+    })
+  }, 1000)
+
+  return () => clearInterval(timer)
+}, [interviewStarted, isPaused, timeLeft])
+
+// Initialize camera
+useEffect(() => {
+  const initCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      })
+        
+      streamRef.current = stream
+        
+      if (candidateVideoRef.current) {
+        candidateVideoRef.current.srcObject = stream
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error)
+    }
+  }
+
+  if (isVideoOn) {
+    initCamera()
+  }
+
+  return () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+    }
+  }
+}, [isVideoOn])
+
   return (
-    <div className="h-screen w-screen bg-gradient-to-br from-gray-50 via-blue-50 to-gray-50 flex flex-col overflow-hidden">
+  <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8 relative">
+    {/* Upload Loading Overlay */}
+    {isUploading && (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+        <Card className="bg-white p-8 max-w-md w-full mx-4 shadow-2xl">
+          <div className="text-center space-y-6">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 animate-pulse">
+              <IconVideo className="h-8 w-8 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                Uploading Interview Recording
+              </h3>
+              <p className="text-gray-600">
+                Please wait while we securely save your video...
+              </p>
+            </div>
+            <div className="space-y-2">
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full bg-blue-600 rounded-full animate-pulse w-3/4"></div>
+              </div>
+              <p className="text-sm text-gray-500">
+                This may take a few moments depending on your connection
+              </p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    )}
+    
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Top Header */}
       <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-3 sm:py-4 bg-white/80 backdrop-blur-sm border-b border-gray-200">
         <div className="flex items-center gap-2 sm:gap-4">
@@ -475,13 +645,26 @@ Start with the greeting and proceed through all questions systematically.`,
             </Button>
           )}
           
-          <div className="text-right">
-            <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wide hidden sm:block">Time Left</p>
-            <p className={`text-xl sm:text-2xl lg:text-3xl font-bold tabular-nums ${
-              timeLeft < 60 ? 'text-red-600' : 'text-blue-600'
-            }`}>
-              {formatTime(timeLeft)}
-            </p>
+          <div className="flex items-center gap-4">
+            {/* Recording Indicator */}
+            {isRecording && (
+              <Badge className="bg-red-600 text-white border-0 animate-pulse">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-white"></span>
+                  <span className="hidden sm:inline">Recording</span>
+                </span>
+              </Badge>
+            )}
+            
+            {/* Timer */}
+            <div className="text-right">
+              <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wide hidden sm:block">Time Left</p>
+              <p className={`text-xl sm:text-2xl lg:text-3xl font-bold tabular-nums ${
+                timeLeft < 60 ? 'text-red-600' : 'text-blue-600'
+              }`}>
+                {formatTime(timeLeft)}
+              </p>
+            </div>
           </div>
           
           <Button
@@ -634,6 +817,7 @@ Start with the greeting and proceed through all questions systematically.`,
           </div>
         </div>
       </Card>
+    </div>
     </div>
   )
 }
