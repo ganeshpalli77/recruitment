@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { InterviewScreen } from './components/interview-screen'
+import { ElevenLabsProvider } from './components/elevenlabs-provider'
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -28,14 +29,16 @@ export default async function InterviewPage({ params }: PageProps) {
   }
 
   return (
-    <InterviewScreen 
-      candidateName={interviewData.candidate_name}
-      duration={interviewData.interview_duration}
-      greetingMessage={interviewData.greeting_message}
-      screeningQuestions={interviewData.screening_questions}
-      technicalQuestions={interviewData.technical_questions}
-      hrQuestions={interviewData.hr_questions}
-      jobTitle={interviewData.job_postings?.title || 'Position'}
-    />
+    <ElevenLabsProvider>
+      <InterviewScreen 
+        candidateName={interviewData.candidate_name}
+        duration={interviewData.interview_duration}
+        greetingMessage={interviewData.greeting_message}
+        screeningQuestions={interviewData.screening_questions}
+        technicalQuestions={interviewData.technical_questions}
+        hrQuestions={interviewData.hr_questions}
+        jobTitle={interviewData.job_postings?.title || 'Position'}
+      />
+    </ElevenLabsProvider>
   )
 }

@@ -14,6 +14,8 @@ import {
   IconPlayerPlay,
   IconX,
 } from "@tabler/icons-react"
+import { useConversation } from '@elevenlabs/react'
+import { toast } from 'sonner'
 
 interface InterviewScreenProps {
   candidateName: string
@@ -40,9 +42,260 @@ export function InterviewScreen({
   const [isVideoOn, setIsVideoOn] = useState(true)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [currentRound, setCurrentRound] = useState<'greeting' | 'screening' | 'technical' | 'hr'>('greeting')
+  const [agentId, setAgentId] = useState<string | null>(null)
+  const [conversationTranscript, setConversationTranscript] = useState<Array<{
+    role: 'ai' | 'user'
+    message: string
+    timestamp: string
+  }>>([])
   
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const aiVideoRef = useRef<HTMLVideoElement>(null)
+  const candidateVideoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+
+  // Expose transcript to console for debugging
+  useEffect(() => {
+    // Make transcript accessible from browser console
+    (window as any).getInterviewTranscript = () => {
+      console.log('\n📋 CURRENT INTERVIEW TRANSCRIPT')
+      console.log('═══════════════════════════════════════════════════════')
+      console.log(`Messages so far: ${conversationTranscript.length}`)
+      console.log('═══════════════════════════════════════════════════════\n')
+      
+      if (conversationTranscript.length === 0) {
+        console.log('No messages yet. Interview not started or no conversation.')
+        return []
+      }
+      
+      conversationTranscript.forEach((entry, index) => {
+        const roleIcon = entry.role === 'ai' ? '🤖' : '👤'
+        const roleName = entry.role === 'ai' ? 'AI' : 'CANDIDATE'
+        console.log(`${index + 1}. [${entry.timestamp}] ${roleIcon} ${roleName}: ${entry.message}`)
+      })
+      
+      return conversationTranscript
+    }
+    
+    console.log('💡 TIP: Type "getInterviewTranscript()" in console to view current transcript at any time')
+  }, [conversationTranscript])
+
+  // Initialize Eleven Labs conversation
+  const conversation = useConversation({
+    onConnect: () => {
+      console.log('🟢 INTERVIEW CONNECTED')
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      console.log('📋 Interview Details:')
+      console.log(`   Candidate: ${candidateName}`)
+      console.log(`   Position: ${jobTitle}`)
+      console.log(`   Duration: ${duration} minutes`)
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    },
+    onDisconnect: () => {
+      console.log('🔴 INTERVIEW DISCONNECTED')
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+    },
+    onMessage: (message) => {
+      const timestamp = new Date().toLocaleTimeString()
+      
+      console.log('\n💬 NEW MESSAGE')
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+      console.log(`📍 Role: ${message.source === 'ai' ? '🤖 AI INTERVIEWER' : '👤 CANDIDATE'}`)
+      console.log(`📝 Message: ${message.message}`)
+      console.log(`⏰ Timestamp: ${timestamp}`)
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
+      
+      // Store in transcript
+      const transcriptEntry = {
+        role: message.source === 'ai' ? 'ai' as const : 'user' as const,
+        message: message.message,
+        timestamp: timestamp
+      }
+      
+      setConversationTranscript(prev => [...prev, transcriptEntry])
+      
+      // Log separately for easy identification
+      if (message.source === 'ai') {
+        console.log('🎯 AI QUESTION:', message.message)
+      } else {
+        console.log('✅ CANDIDATE RESPONSE:', message.message)
+      }
+    },
+    onError: (error) => {
+      console.error('❌ INTERVIEW ERROR:', error)
+    },
+    overrides: {
+      agent: {
+        prompt: {
+          prompt: `You are an AI interviewer conducting a ${duration}-minute interview for the position of ${jobTitle}.
+          
+Your role:
+1. Start with this greeting: "${greetingMessage}"
+2. Ask the following questions one by one, waiting for the candidate's response before moving to the next:
+
+SCREENING QUESTIONS:
+${screeningQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
+
+TECHNICAL QUESTIONS:
+${technicalQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
+
+HR QUESTIONS:
+${hrQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}
+
+Instructions:
+- Ask questions naturally and conversationally
+- Listen carefully to each answer
+- Ask follow-up questions when appropriate
+- Be professional but friendly
+- Keep track of time (${duration} minutes total)
+- Thank the candidate at the end
+
+Start with the greeting and proceed through all questions systematically.`,
+        },
+        firstMessage: greetingMessage,
+        language: "en",
+      },
+    },
+  })
+
+  const { status, isSpeaking, startSession, endSession } = conversation
+
+  // Sync AI video with speaking state for realistic experience
+  useEffect(() => {
+    const video = aiVideoRef.current
+    if (!video) return
+
+    if (isSpeaking) {
+      // AI is asking a question - play the video
+      video.play().catch(error => {
+        console.log('Video play failed:', error)
+      })
+      console.log('🎬 AI video playing - AI is speaking')
+    } else {
+      // AI is listening to response - pause the video
+      video.pause()
+      console.log('⏸️ AI video paused - AI is listening')
+    }
+  }, [isSpeaking])
+
+  // Start AI interview with voice
+  const startAIInterview = async () => {
+    try {
+      // Request microphone permission first
+      await navigator.mediaDevices.getUserMedia({ audio: true })
+      
+      // Get Eleven Labs Agent ID from environment
+      const elevenLabsAgentId = process.env.NEXT_PUBLIC_ELEVENLABS_AGENT_ID
+      
+      if (!elevenLabsAgentId) {
+        toast.error('Eleven Labs Agent ID not configured', {
+          description: 'Please set NEXT_PUBLIC_ELEVENLABS_AGENT_ID in your environment variables'
+        })
+        return
+      }
+
+      toast.info('Starting AI interview...', {
+        description: 'The AI interviewer will greet you shortly'
+      })
+
+      let conversationId: string
+
+      // Try to get signed URL for secure conversation (if API key is configured)
+      try {
+        const signedUrlResponse = await fetch('/api/elevenlabs/signed-url', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ agentId: elevenLabsAgentId }),
+        })
+
+        if (signedUrlResponse.ok) {
+          const { conversationToken } = await signedUrlResponse.json()
+          
+          // Use conversation token for secure conversation
+          conversationId = await startSession({
+            conversationToken: conversationToken,
+            connectionType: 'webrtc',
+          })
+          
+          console.log('Using signed conversation (secure mode)')
+        } else {
+          throw new Error('Signed conversation not available')
+        }
+      } catch (signedUrlError) {
+        // Fallback to public agent mode
+        console.log('Falling back to public agent mode:', signedUrlError)
+        
+        conversationId = await startSession({
+          agentId: elevenLabsAgentId,
+          connectionType: 'webrtc',
+        })
+        
+        console.log('Using public agent mode (consider adding ELEVENLABS_API_KEY for production)')
+      }
+
+      setAgentId(conversationId)
+      
+      toast.success('Interview started!', {
+        description: 'The AI interviewer is ready. Speak clearly into your microphone.'
+      })
+    } catch (error) {
+      console.error('Error starting AI interview:', error)
+      toast.error('Failed to start interview', {
+        description: error instanceof Error ? error.message : 'Could not connect to voice agent'
+      })
+    }
+  }
+
+  // Log complete transcript
+  const logCompleteTranscript = () => {
+    console.log('\n\n')
+    console.log('═══════════════════════════════════════════════════════')
+    console.log('📊 COMPLETE INTERVIEW TRANSCRIPT')
+    console.log('═══════════════════════════════════════════════════════')
+    console.log(`Candidate: ${candidateName}`)
+    console.log(`Position: ${jobTitle}`)
+    console.log(`Total Messages: ${conversationTranscript.length}`)
+    console.log('═══════════════════════════════════════════════════════\n')
+    
+    conversationTranscript.forEach((entry, index) => {
+      const roleIcon = entry.role === 'ai' ? '🤖' : '👤'
+      const roleName = entry.role === 'ai' ? 'AI INTERVIEWER' : 'CANDIDATE'
+      
+      console.log(`\n[${index + 1}] ${roleIcon} ${roleName} - ${entry.timestamp}`)
+      console.log('─'.repeat(55))
+      console.log(entry.message)
+      console.log('─'.repeat(55))
+    })
+    
+    console.log('\n═══════════════════════════════════════════════════════')
+    console.log('END OF TRANSCRIPT')
+    console.log('═══════════════════════════════════════════════════════\n\n')
+    
+    // Also provide as JSON for easy copy-paste
+    console.log('📋 TRANSCRIPT AS JSON (for database storage):')
+    console.log(JSON.stringify({
+      candidate: candidateName,
+      position: jobTitle,
+      duration: duration,
+      transcript: conversationTranscript,
+      interviewDate: new Date().toISOString()
+    }, null, 2))
+  }
+
+  // End the interview
+  const stopAIInterview = () => {
+    // Log complete transcript before ending
+    if (conversationTranscript.length > 0) {
+      logCompleteTranscript()
+    }
+    
+    endSession()
+    setAgentId(null)
+    toast.info('Interview ended', {
+      description: 'Check console for complete transcript'
+    })
+  }
 
   // All questions combined
   const allQuestions = [
@@ -86,8 +339,8 @@ export function InterviewScreen({
         
         streamRef.current = stream
         
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
+        if (candidateVideoRef.current) {
+          candidateVideoRef.current.srcObject = stream
         }
       } catch (error) {
         console.error('Error accessing camera:', error)
@@ -166,6 +419,19 @@ export function InterviewScreen({
         </div>
         
         <div className="flex items-center gap-3 sm:gap-6">
+          {/* Start Interview Button */}
+          {!agentId && (
+            <Button
+              size="default"
+              onClick={startAIInterview}
+              className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
+            >
+              <IconMicrophone className="h-4 w-4 mr-2" />
+              <span className="hidden sm:inline">Start AI Interview</span>
+              <span className="sm:hidden">Start</span>
+            </Button>
+          )}
+          
           <div className="text-right">
             <p className="text-[10px] sm:text-xs text-gray-500 uppercase tracking-wide hidden sm:block">Time Left</p>
             <p className={`text-xl sm:text-2xl lg:text-3xl font-bold tabular-nums ${
@@ -200,7 +466,7 @@ export function InterviewScreen({
           
           <div className="h-full relative bg-gradient-to-br from-blue-50 to-indigo-50">
             <video
-              autoPlay
+              ref={aiVideoRef}
               loop
               muted
               playsInline
@@ -209,26 +475,41 @@ export function InterviewScreen({
               <source src="/intervie01 (1).mp4" type="video/mp4" />
               Your browser does not support the video tag.
             </video>
+            
+            {/* Speaking Indicator */}
+            {isSpeaking && (
+              <div className="absolute bottom-4 left-4 pointer-events-none">
+                <div className="flex gap-1 bg-white/90 backdrop-blur-sm rounded-full px-3 py-2 shadow-lg">
+                  <div className="w-1.5 h-6 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-1.5 h-6 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-1.5 h-6 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                </div>
+              </div>
+            )}
+
           </div>
 
-          <div className="absolute bottom-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button
-              size="sm"
-              variant="secondary"
-              className="bg-white/90 backdrop-blur-sm hover:bg-white shadow-md"
-              onClick={(e) => {
-                const video = e.currentTarget.closest('div')?.querySelector('video')
-                if (video) {
-                  if (video.paused) {
-                    video.play()
-                  } else {
-                    video.pause()
-                  }
-                }
-              }}
-            >
-              <IconPlayerPlay className="h-4 w-4" />
-            </Button>
+          <div className="absolute bottom-2 sm:bottom-4 right-2 sm:right-4 flex gap-2">
+            {agentId && (
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={stopAIInterview}
+                className="opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <IconX className="h-4 w-4 mr-1" />
+                <span className="hidden sm:inline">End Interview</span>
+              </Button>
+            )}
+            
+            {status === 'connected' && (
+              <Badge className="bg-green-600 text-white border-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-white animate-pulse"></span>
+                  Connected
+                </span>
+              </Badge>
+            )}
           </div>
         </Card>
 
@@ -242,7 +523,7 @@ export function InterviewScreen({
           
           <div className="h-full relative bg-gray-100">
             <video
-              ref={videoRef}
+              ref={candidateVideoRef}
               autoPlay
               playsInline
               muted
