@@ -47,26 +47,32 @@ export async function generateInterviewQuestions({
       return { success: false, error: 'Job posting not found' }
     }
 
-    // 3. Calculate number of questions based on duration
+    // 3. Calculate number of BASE questions based on duration
+    // NOTE: Actual total will be 3x this amount (easy, medium, difficult variations)
     const duration = interviewSetup.duration
-    let totalQuestions = 0
+    let baseQuestions = 0
     
     switch (duration) {
+      case 10:
+        baseQuestions = 3  // Total: 9 questions (3 × 3)
+        break
       case 20:
-        totalQuestions = 7
+        baseQuestions = 7  // Total: 21 questions (7 × 3)
         break
       case 30:
-        totalQuestions = 11
+        baseQuestions = 10 // Total: 30 questions (10 × 3)
         break
       case 45:
-        totalQuestions = 16
+        baseQuestions = 15 // Total: 45 questions (15 × 3)
         break
       case 60:
-        totalQuestions = 20
+        baseQuestions = 20 // Total: 60 questions (20 × 3)
         break
       default:
-        totalQuestions = 11 // default to 30 min
+        baseQuestions = 10 // default to 30 min
     }
+    
+    const totalQuestions = baseQuestions * 3 // Total questions with all difficulty variations
 
     // 4. Calculate distribution of questions per round
     const screeningPercentage = interviewSetup.screening_round_percentage || 30
@@ -85,74 +91,80 @@ export async function generateInterviewQuestions({
     // 5. Generate greeting message
     const greeting = `Welcome to the interview, ${candidateName}! Thank you for taking the time to speak with us today about the ${jobPosting.title} position. We're excited to learn more about your background and experience. This interview will take approximately ${duration} minutes. Let's get started!`
 
-    // 6. Call backend API to generate questions using Azure OpenAI
-    const backendResponse = await fetch('http://localhost:8000/api/generate-interview-questions', {
+    // 6. Call backend API to generate MULTI-LEVEL questions using Azure OpenAI
+    // This generates 3 difficulty variations (easy, medium, difficult) for each base question
+    const backendResponse = await fetch('http://localhost:8000/api/generate-multi-level-questions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        candidate_id: candidateId,
+        candidate_name: candidateName,
+        job_posting_id: jobId,
         job_title: jobPosting.title,
         job_description: jobPosting.description,
-        job_requirements: jobPosting.requirements,
-        skills_required: jobPosting.skills_required,
-        ai_analysis: jobPosting.ai_analysis,
-        candidate_name: candidateName,
-        screening_count: distribution.screening,
-        technical_count: distribution.technical,
-        hr_count: distribution.hr,
-        duration: duration
+        job_requirements: jobPosting.requirements || '',
+        skills_required: jobPosting.skills_required || [],
+        // ai_analysis is JSONB in database, convert to string for backend
+        ai_analysis: jobPosting.ai_analysis 
+          ? (typeof jobPosting.ai_analysis === 'string' 
+              ? jobPosting.ai_analysis 
+              : JSON.stringify(jobPosting.ai_analysis))
+          : '',
+        duration_minutes: duration,
+        screening_percentage: screeningPercentage,
+        technical_percentage: technicalPercentage,
+        hr_percentage: hrPercentage
       })
     })
 
     if (!backendResponse.ok) {
       const errorData = await backendResponse.json()
+      
+      // Handle Pydantic validation errors (array of objects)
+      let errorMessage = 'Failed to generate questions from AI service'
+      
+      if (errorData.detail) {
+        if (Array.isArray(errorData.detail)) {
+          // Pydantic validation errors
+          errorMessage = errorData.detail
+            .map((err: any) => `${err.loc?.join('.') || 'field'}: ${err.msg}`)
+            .join(', ')
+        } else if (typeof errorData.detail === 'string') {
+          errorMessage = errorData.detail
+        } else {
+          errorMessage = JSON.stringify(errorData.detail)
+        }
+      }
+      
       return { 
         success: false, 
-        error: errorData.detail || 'Failed to generate questions from AI service' 
+        error: errorMessage
       }
     }
 
     const generatedQuestions = await backendResponse.json()
 
-    // 7. Store questions in database
-    const { data: savedQuestions, error: saveError } = await supabase
-      .from('interview_questions')
-      .upsert({
-        candidate_id: candidateId,
-        candidate_name: candidateName,
-        job_posting_id: jobId,
-        interview_duration: duration,
-        screening_percentage: screeningPercentage,
-        technical_percentage: technicalPercentage,
-        hr_percentage: hrPercentage,
-        greeting_message: greeting,
-        screening_questions: generatedQuestions.screening_questions || [],
-        technical_questions: generatedQuestions.technical_questions || [],
-        hr_questions: generatedQuestions.hr_questions || [],
-        total_questions: totalQuestions,
-        ai_model: generatedQuestions.model || 'gpt-4'
-      }, {
-        onConflict: 'candidate_id,job_posting_id'
-      })
-      .select()
-      .single()
-
-    if (saveError) {
-      console.error('Error saving questions:', saveError)
-      return { 
-        success: false, 
-        error: 'Failed to save generated questions to database' 
-      }
-    }
+    // 7. Questions are automatically saved to 'interview_questions_multi_level' table by the backend
+    // The response contains all the multi-level questions with difficulty variations
+    
+    console.log(`✅ Generated ${generatedQuestions.total_questions} questions (${generatedQuestions.base_questions_count} base × 3 difficulty levels)`)
 
     return {
       success: true,
       data: {
-        questionId: savedQuestions.id,
-        totalQuestions,
-        distribution,
-        greeting
+        candidateId: generatedQuestions.candidate_id,
+        baseQuestions: generatedQuestions.base_questions_count,
+        totalQuestions: generatedQuestions.total_questions,
+        distribution: {
+          screening: generatedQuestions.screening_questions?.length || 0,
+          technical: generatedQuestions.technical_questions?.length || 0,
+          hr: generatedQuestions.hr_questions?.length || 0
+        },
+        greeting: generatedQuestions.greeting_message,
+        model: generatedQuestions.model,
+        generationTime: generatedQuestions.generation_time_ms
       }
     }
 

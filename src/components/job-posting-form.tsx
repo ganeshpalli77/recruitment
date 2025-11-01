@@ -37,6 +37,12 @@ import { Separator } from "@/components/ui/separator"
 
 import { createJobPosting } from '@/app/job-postings/actions'
 
+type JobPostingFormValues = {
+  title: string
+  description: string
+  experience_required: number
+}
+
 const jobPostingSchema = z.object({
   title: z.string().min(5, {
     message: "Job title must be at least 5 characters.",
@@ -44,16 +50,12 @@ const jobPostingSchema = z.object({
   description: z.string().min(50, {
     message: "Job description must be at least 50 characters.",
   }),
-  requirements: z.string().min(20, {
-    message: "Requirements must be at least 20 characters.",
-  }),
-  experience_required: z.coerce.number().min(0, {
+  experience_required: z.number().min(0, {
     message: "Experience must be 0 or greater.",
   }).max(20, {
     message: "Experience cannot exceed 20 years.",
   }),
-  skills_required: z.string().optional(),
-})
+}) satisfies z.ZodType<JobPostingFormValues>
 
 export function JobPostingForm() {
   const form = useForm<z.infer<typeof jobPostingSchema>>({
@@ -61,9 +63,7 @@ export function JobPostingForm() {
     defaultValues: {
       title: "",
       description: "",
-      requirements: "",
       experience_required: 0,
-      skills_required: "",
     },
   })
 
@@ -71,9 +71,7 @@ export function JobPostingForm() {
     const formData = new FormData()
     formData.append('title', values.title)
     formData.append('description', values.description)
-    formData.append('requirements', values.requirements)
     formData.append('experience_required', values.experience_required.toString())
-    formData.append('skills_required', values.skills_required || '')
     
     await createJobPosting(formData)
   }
@@ -153,34 +151,11 @@ export function JobPostingForm() {
                             placeholder="3"
                             className="h-12 text-base"
                             {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
                           />
                         </FormControl>
                         <FormDescription>
                           Minimum years of relevant experience required.
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="skills_required"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-base font-medium flex items-center gap-2">
-                          <IconTags className="h-4 w-4 text-blue-600" />
-                          Required Skills
-                        </FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="React, Node.js, TypeScript"
-                            className="h-12 text-base"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Comma-separated list of key skills and technologies.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
@@ -220,30 +195,6 @@ export function JobPostingForm() {
                       </FormControl>
                       <FormDescription>
                         Describe the role, responsibilities, company culture, and what makes this opportunity attractive.
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="requirements"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-base font-medium flex items-center gap-2">
-                        <IconClipboardList className="h-4 w-4 text-purple-600" />
-                        Requirements & Qualifications
-                      </FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="List required qualifications, education, and certifications..."
-                          className="min-h-[140px] text-base leading-relaxed"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                        List both required and preferred qualifications, education, and certifications.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

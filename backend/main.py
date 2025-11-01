@@ -40,6 +40,10 @@ from models.interview_questions import (
     InterviewQuestionGenerationRequest,
     InterviewQuestionGenerationResponse
 )
+from models.multi_level_questions import (
+    MultiLevelQuestionGenerationRequest,
+    MultiLevelQuestionGenerationResponse
+)
 from models.interview_analysis import (
     InterviewAnalysisRequest,
     InterviewAnalysisResponse
@@ -89,6 +93,7 @@ openai_service = None
 supabase_service = None
 resume_evaluation_service = None
 interview_analysis_service = None
+multi_level_question_service = None
 
 # Processing queue for batch operations
 processing_queue = asyncio.Queue(maxsize=1000)
@@ -117,6 +122,15 @@ def get_interview_analysis_service():
         openai_svc = get_openai_service()
         interview_analysis_service = InterviewAnalysisService(openai_svc)
     return interview_analysis_service
+
+def get_multi_level_question_service():
+    global multi_level_question_service
+    if multi_level_question_service is None:
+        from services.multi_level_question_service import MultiLevelQuestionService
+        openai_svc = get_openai_service()
+        supabase_svc = get_supabase_service()
+        multi_level_question_service = MultiLevelQuestionService(openai_svc, supabase_svc)
+    return multi_level_question_service
 
 @app.get("/")
 async def root():
@@ -828,6 +842,78 @@ Generate {question_request.hr_count} questions now:"""
         raise HTTPException(
             status_code=500,
             detail=f"Failed to generate interview questions: {str(e)}"
+        )
+
+# ============================================================================
+# Multi-Level Interview Question Generation Endpoint
+# ============================================================================
+
+@app.post("/api/generate-multi-level-questions", response_model=MultiLevelQuestionGenerationResponse)
+@limiter.limit("20 per minute")
+async def generate_multi_level_interview_questions(
+    request: Request,
+    question_request: MultiLevelQuestionGenerationRequest
+):
+    """
+    Generate multi-level interview questions with difficulty variations (easy, medium, difficult).
+    
+    For each base question, generates 3 variations at different difficulty levels.
+    Example: 20 min interview → 7 base questions → 21 total questions (7 × 3)
+    """
+    start_time = datetime.now()
+    
+    try:
+        logger.info(f"Generating multi-level questions for {question_request.candidate_name} - Duration: {question_request.duration_minutes} min")
+        
+        # Get multi-level question service
+        ml_service = get_multi_level_question_service()
+        
+        # Generate questions with variations
+        result = await ml_service.generate_multi_level_questions(
+            candidate_id=question_request.candidate_id,
+            candidate_name=question_request.candidate_name,
+            job_posting_id=question_request.job_posting_id,
+            job_title=question_request.job_title,
+            job_description=question_request.job_description,
+            job_requirements=question_request.job_requirements,
+            skills_required=question_request.skills_required,
+            ai_analysis=question_request.ai_analysis or "",
+            duration_minutes=question_request.duration_minutes,
+            screening_pct=question_request.screening_percentage,
+            technical_pct=question_request.technical_percentage,
+            hr_pct=question_request.hr_percentage
+        )
+        
+        # Calculate generation time
+        end_time = datetime.now()
+        generation_time_ms = int((end_time - start_time).total_seconds() * 1000)
+        
+        logger.info(f"Successfully generated {result['total_questions']} questions ({result['base_questions_count']} base × 3 difficulty levels) in {generation_time_ms}ms")
+        
+        return MultiLevelQuestionGenerationResponse(
+            candidate_id=result['candidate_id'],
+            candidate_name=result['candidate_name'],
+            job_posting_id=result['job_posting_id'],
+            interview_duration=result['interview_duration'],
+            screening_percentage=result['screening_percentage'],
+            technical_percentage=result['technical_percentage'],
+            hr_percentage=result['hr_percentage'],
+            base_questions_count=result['base_questions_count'],
+            total_questions=result['total_questions'],
+            greeting_message=result['greeting_message'],
+            screening_questions=result['screening_questions'],
+            technical_questions=result['technical_questions'],
+            hr_questions=result['hr_questions'],
+            model=settings.azure_openai_deployment_name,
+            generation_time_ms=generation_time_ms,
+            generated_at=result['generated_at']
+        )
+        
+    except Exception as e:
+        logger.error(f"Error generating multi-level interview questions: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate multi-level interview questions: {str(e)}"
         )
 
 # ============================================================================

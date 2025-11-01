@@ -65,7 +65,17 @@ export default async function JobEvaluationDetailPage({ params }: PageProps) {
     console.error('Error fetching interview results:', resultsError)
   }
 
-  const candidatesData = interviewResults || []
+  // Fetch interview recordings separately
+  const { data: recordings } = await supabase
+    .from('interview_recordings')
+    .select('candidate_id, video_url, file_path')
+    .eq('job_posting_id', id)
+
+  // Merge recordings with results
+  const candidatesData = (interviewResults || []).map(result => ({
+    ...result,
+    interview_recordings: recordings?.filter(r => r.candidate_id === result.candidate_id) || []
+  }))
 
   return (
     <SidebarProvider

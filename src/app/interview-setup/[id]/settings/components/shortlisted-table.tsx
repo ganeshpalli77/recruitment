@@ -135,7 +135,8 @@ export function ShortlistedTable({ data, jobId }: ShortlistedTableProps) {
       })
 
       if (result.success) {
-        const interviewLink = `${window.location.origin}/interview/${result.data?.questionId}`
+        // Use candidateId for the interview link
+        const interviewLink = `${window.location.origin}/interview/${result.data?.candidateId || candidate.id}`
         
         // Store link in state
         setCandidateLinks(prev => ({
@@ -146,15 +147,15 @@ export function ShortlistedTable({ data, jobId }: ShortlistedTableProps) {
         // Copy link to clipboard
         navigator.clipboard.writeText(interviewLink).then(() => {
           toast.success(
-            `Interview questions generated successfully!`,
+            `✅ ${result.data?.totalQuestions || 21} interview questions generated!`,
             {
-              description: `Interview link copied to clipboard. Share it with ${candidate.candidate_name}.`,
+              description: `${result.data?.baseQuestions || 7} base questions × 3 difficulty levels. Link copied to clipboard - share it with ${candidate.candidate_name}.`,
               duration: 8000,
             }
           )
         }).catch(() => {
           toast.success(
-            `Interview questions generated!`,
+            `✅ ${result.data?.totalQuestions || 21} interview questions generated!`,
             {
               description: `Link: ${interviewLink}`,
               duration: 10000,

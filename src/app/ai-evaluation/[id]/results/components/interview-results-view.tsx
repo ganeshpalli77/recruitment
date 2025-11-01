@@ -46,6 +46,10 @@ interface InterviewResult {
   question_analyses?: any[]
   analyzed_at: string
   created_at: string
+  interview_recordings?: Array<{
+    video_url: string
+    file_path: string
+  }>
 }
 
 interface InterviewResultsViewProps {

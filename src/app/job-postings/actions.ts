@@ -18,9 +18,9 @@ export async function createJobPosting(formData: FormData) {
   const jobData = {
     title: formData.get('title') as string,
     description: formData.get('description') as string,
-    requirements: formData.get('requirements') as string,
+    requirements: '', // Default empty string since field was removed from form
     experience_required: parseInt(formData.get('experience_required') as string) || 0,
-    skills_required: (formData.get('skills_required') as string)?.split(',').map(s => s.trim()) || [],
+    skills_required: [], // Default empty array since field was removed from form
     created_by: user.id,
     status: 'active' as const
   }
@@ -50,7 +50,7 @@ export async function createJobPosting(formData: FormData) {
         job_id: insertedJob.id,
         title: insertedJob.title,
         description: insertedJob.description,
-        requirements: insertedJob.requirements
+        requirements: '' // Pass empty string since requirements field was removed
       }).catch((error) => {
         console.error('AI analysis failed (non-blocking):', error)
       })

@@ -245,27 +245,40 @@ export function CandidateDetailModal({
               </Card>
             </div>
 
-            {/* Video Recording Link */}
+            {/* Video Recording */}
             <div>
               <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
                 <IconVideo className="h-5 w-5 text-gray-600" />
                 Interview Recording
               </h3>
               <Card className="p-4">
-                <p className="text-sm text-gray-600 mb-2">
-                  Screen recording from the interview session
-                </p>
-                <a 
-                  href="#" 
-                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    alert('Video playback functionality to be implemented')
-                  }}
-                >
-                  <IconVideo className="h-4 w-4" />
-                  View Interview Recording
-                </a>
+                {candidate.interview_recordings && candidate.interview_recordings.length > 0 ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-gray-600 mb-3">
+                      Screen recording from the interview session
+                    </p>
+                    <video 
+                      controls 
+                      className="w-full rounded-lg border border-gray-200"
+                      style={{ maxHeight: '400px' }}
+                    >
+                      <source src={candidate.interview_recordings[0].video_url} type="video/webm" />
+                      Your browser does not support the video tag.
+                    </video>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <IconVideo className="h-3 w-3" />
+                      <span>Recording available in WebM format</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <IconVideo className="h-12 w-12 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No recording available</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      The interview recording was not saved or has been deleted
+                    </p>
+                  </div>
+                )}
               </Card>
             </div>
           </div>
